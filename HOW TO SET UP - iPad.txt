@@ -1,0 +1,140 @@
+PLAN BUILDER ON YOUR iPAD - HOW TO SET IT UP (FREE)
+====================================================
+
+What this is
+------------
+Plan Builder as a web app that works on its own: your computer does NOT need to be on. You sign in
+with the Google account that has your client folders, and it reads everything straight from Google
+Drive: your clients, their finished posts (both sizes), swipe videos, captions to copy, proofs, and
+the Approve button. It's the same as the Android app.
+On the iPad you add it to the Home Screen, so it has its own icon and opens full screen like an app.
+
+It costs nothing:
+- Your own address: plan.racdigitalcreations.com (a free extra name on the domain you already own).
+- Free hosting: GitHub Pages.
+- No Mac, no Apple developer account, no App Store.
+
+Privacy: the app's page holds no client information. Clients and posts only appear after signing in
+with a Google account you have allowed (Part 3, step 6). Nothing on your website links to it, and
+search engines are told to skip it. (The app's code itself is public on GitHub. It has no keys or
+passwords in it, so that's fine.)
+
+The files are in the "ipad_web" folder (the zip "Plan Builder iPad (web app).zip"). Unzip it first.
+
+You'll do Parts 1-3 once, on the computer. They take about 20 minutes.
+
+
+PART 1 - Put the app online (free, GitHub Pages)
+------------------------------------------------
+1. Go to github.com and click Sign up. Make a free account (any username, for example
+   racdigitalcreations). Confirm your email.
+2. Click the "+" at the top right > New repository.
+   - Repository name: plan-builder
+   - Leave it Public (free GitHub Pages needs that).
+   - Click Create repository.
+3. On the next page click the link "uploading an existing file".
+4. Open the unzipped ipad_web folder on the computer, select ALL the files inside it
+   (Ctrl+A on Windows, Cmd+A on Mac) and drag them onto the GitHub page.
+   You should see: index.html, sw.js, config.js, manifest.json, logo.svg, icon.png, icon-512.png,
+   robots.txt, CNAME (and this guide, which is fine to include).
+   Click the green Commit changes button.
+5. Click Settings (top of the repository) > Pages (left side).
+   - Under "Build and deployment", Source: Deploy from a branch.
+   - Branch: main, folder: / (root). Click Save.
+6. On that same Pages screen, "Custom domain" should already say plan.racdigitalcreations.com (the
+   CNAME file sets it). If it's empty, type plan.racdigitalcreations.com and click Save.
+   GitHub shows a DNS check. It turns green after Part 2 is done.
+
+
+PART 2 - Point plan.racdigitalcreations.com at it (one domain record)
+---------------------------------------------------------------------
+This doesn't touch your Google Sites homepage at all. It only adds the new "plan" name.
+
+Your domain is managed where you bought it. If you bought it through Google (Google Domains), it's
+now at Squarespace Domains.
+
+Squarespace Domains:
+1. Go to domains.squarespace.com and sign in with the same Google account you used for Google Domains.
+2. Click racdigitalcreations.com > DNS (or "DNS Settings").
+3. Under "Custom records", click Add record:
+   - Host: plan
+   - Type: CNAME
+   - Data / Points to: YOURGITHUBNAME.github.io   (your GitHub username from Part 1, then .github.io)
+   Click Save.
+
+Somewhere else (GoDaddy, Namecheap, etc.): open the DNS settings for racdigitalcreations.com and add
+the same record: type CNAME, name/host "plan", value "YOURGITHUBNAME.github.io".
+
+4. Wait. It usually works within 30 minutes, sometimes a few hours.
+5. Back on GitHub: Settings > Pages. When the DNS check is green, tick "Enforce HTTPS".
+   (If that box is greyed out, wait a bit longer and refresh. It needs HTTPS for sign-in to work.)
+6. Open https://plan.racdigitalcreations.com on the computer. You should see the Plan Builder screen
+   saying "Almost ready: put your Google Client ID in config.js". That's expected: Part 3 fixes it.
+
+
+PART 3 - Let the app sign in to Google (once)
+---------------------------------------------
+Use the same Google Cloud project you used for credentials.json (and the Android app).
+
+1. Go to console.cloud.google.com, signed in with the same account. At the top left, check the
+   project name is your Plan Builder one.
+2. Menu (three lines) > "APIs & Services" > "Credentials"
+   (newer screens: "Google Auth Platform" > "Clients").
+3. "+ Create credentials" > "OAuth client ID" (newer screens: "+ Create client").
+4. Application type: "Web application". Name: Plan Builder iPad.
+   - Authorized JavaScript origins > + Add URI:  https://plan.racdigitalcreations.com
+   - Authorized redirect URIs > + Add URI:      https://plan.racdigitalcreations.com/
+     (the same with a / on the end)
+   Click Create.
+5. A window shows "Your Client ID" (a long code ending in .apps.googleusercontent.com). Click the
+   copy icon next to it. (You don't need the "Client secret". Don't put that anywhere.)
+6. Check who's allowed to sign in: menu > "APIs & Services" > "OAuth consent screen"
+   (newer screens: "Google Auth Platform" > "Audience"). If it says "Testing", make sure your Google
+   account is under "Test users". Only accounts listed there can ever see anything in the app.
+7. Put the Client ID in the app: on GitHub, open your plan-builder repository, click config.js,
+   then the pencil icon (Edit). Paste the Client ID between the quotes on the googleClientId line, so
+   it looks like:
+       googleClientId: "1234567890-abc123.apps.googleusercontent.com",
+   If your main client folder isn't called RAC Clients, change that line too.
+   Click Commit changes (twice).
+8. Wait about 5 minutes (for GitHub and Google to update).
+
+
+PART 4 - Put it on the iPad
+---------------------------
+1. On the iPad, open Safari and go to plan.racdigitalcreations.com
+2. Check "Main Drive folder" says RAC Clients (or your main folder's name). Tap "Sign in with Google".
+   Pick your account and tap Continue / Allow.
+   - "Google hasn't verified this app": tap Continue. It's your own app.
+3. Tap the Share button (square with an arrow) > "Add to Home Screen" > Add.
+4. Open Plan Builder from the Home Screen and sign in once more (the Home Screen app keeps its own
+   sign-in, separate from Safari).
+
+Works the same on an iPhone, an Android phone or any computer browser.
+
+
+USING IT
+--------
+- Tap a client to see their finished posts. Waiting / Approved at the top filter them.
+- Tap a post: swipe through the slides, switch sizes, Copy Caption, Approve.
+- Press and hold a slide to save it to Photos.
+- Tap a proof to open it in Google Drive's viewer.
+- Approve: the computer app shows it the next time you open that client's posts on 4 Review (Plan
+  Builder 2026.10.14-standalone or newer), the same as the Android app.
+- Google's sign-in lasts an hour. After that the app asks Google again by itself. Now and then it
+  may show the Sign in with Google button: just tap it.
+- "Change the Drive folder" and "Sign out" are at the bottom of the Clients screen.
+
+
+If something goes wrong
+-----------------------
+- "Almost ready: put your Google Client ID in config.js": Part 3 step 7 isn't done yet, or GitHub
+  hasn't updated (wait 5 minutes, then pull down to refresh).
+- Google says "redirect_uri_mismatch": the address at the bottom of the sign-in screen ("Address for
+  Google Cloud setup") must be in Part 3 step 4 exactly, as both the origin (without the last /)
+  and the redirect URI (with the /).
+- Google says "access_denied" or the account isn't allowed: add it as a Test user (Part 3 step 6).
+- "Couldn't find a folder named ...": tap Change the Drive folder and type the exact name.
+- The address doesn't open, or says "Site not found": the domain record (Part 2) hasn't spread yet,
+  or the Host/Data are mistyped. Check GitHub Settings > Pages for the DNS check.
+- Anything else: take a screenshot and send it to Claude.

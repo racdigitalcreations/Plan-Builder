@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Plan Builder">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A1628">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="logo.svg">
+<script src="config.js"></script>
+<title>Plan Builder</title>
+<style>
+  :root { --bg:#0A1628; --bg2:#0D1B30; --card:#12223A; --card2:#1A2F4D; --line:#2A4468; --text:#EAF2FA;
+          --muted:#9DB2CC; --faint:#6F87A6; --blue:#1477C2; --sky:#4FB3E8; --orange:#E8821E; --green:#34B26A;
+          --red:#E86B6B; --grad:linear-gradient(90deg,#1477C2,#4FB3E8 55%,#E8821E); --r:18px; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  [hidden] { display:none !important; }
+  html, body { margin:0; color:var(--text); min-height:100%;
+               background:radial-gradient(120% 60% at 50% -10%, #17345C 0%, var(--bg) 60%) fixed, var(--bg);
+               font:17px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+               -webkit-font-smoothing:antialiased; }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  .stripe { height:4px; background:var(--grad); position:fixed; top:0; left:0; right:0; z-index:20; }
+  header { position:sticky; top:0; z-index:10; padding:calc(env(safe-area-inset-top) + 14px) 18px 12px;
+           background:rgba(10,22,40,.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+           border-bottom:1px solid rgba(42,68,104,.6); display:flex; align-items:center; gap:12px; min-height:62px; }
+  header .back { width:38px; height:38px; border-radius:12px; border:0; background:var(--card2); display:grid;
+                 place-items:center; flex:none; }
+  header .back svg { width:20px; height:20px; }
+  header .titles { flex:1; min-width:0; }
+  header h1 { font-size:20px; line-height:1.15; margin:0; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  header .sub { font-size:13px; color:var(--muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  header .mark { height:30px; flex:none; opacity:.95; }
+  main { padding:18px 18px calc(env(safe-area-inset-bottom) + 120px); max-width:960px; margin:0 auto; }
+  .muted { color:var(--muted); font-size:15px; }
+  h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--sky); margin:26px 2px 10px; font-weight:700; }
+
+  /* sign in */
+  .hero { text-align:center; padding:9vh 6px 0; }
+  .hero img { width:min(260px,70%); }
+  .hero h1 { font-size:26px; margin:26px 0 6px; }
+  .hero p { color:var(--muted); margin:0 auto 26px; max-width:330px; }
+  .code { display:flex; gap:8px; justify-content:center; margin-bottom:18px; }
+  .code input { width:46px; height:58px; border-radius:14px; border:1px solid var(--line); background:var(--bg2);
+                color:var(--text); font-size:26px; font-weight:700; text-align:center; outline:none; }
+  .folder { width:min(330px,100%); margin:0 auto 14px; text-align:left; }
+  .folder label { display:block; font-size:13px; color:var(--muted); margin:0 0 6px 4px; }
+  .folder input { width:100%; height:52px; border-radius:14px; border:1px solid var(--line); background:var(--bg2);
+                  color:var(--text); font:inherit; padding:0 14px; }
+  .setup { margin:34px auto 0; max-width:420px; font-size:13px; color:var(--faint); word-break:break-all; }
+  .code input:focus { border-color:var(--sky); box-shadow:0 0 0 3px rgba(79,179,232,.25); }
+
+  /* buttons */
+  .btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; border:0; border-radius:16px;
+         padding:16px; font-size:17px; font-weight:700; color:white; text-decoration:none;
+         background:linear-gradient(135deg,#1477C2,#2E97DB); box-shadow:0 8px 22px rgba(20,119,194,.35); }
+  .btn:active { transform:scale(.98); }
+  .btn.green { background:linear-gradient(135deg,#2A9D5C,#38C177); box-shadow:0 8px 22px rgba(52,178,106,.3); }
+  .btn.ghost { background:var(--card2); box-shadow:none; color:var(--text); }
+  .btn.done { background:var(--card2); box-shadow:none; color:#7fd6a0; }
+  .btn svg { width:20px; height:20px; }
+
+  /* lists */
+  .search { width:100%; border-radius:14px; border:1px solid var(--line); background:var(--bg2); color:var(--text);
+            padding:13px 14px 13px 42px; font-size:16px; outline:none; margin-bottom:14px;
+            background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239DB2CC' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+            background-repeat:no-repeat; background-position:14px center; background-size:18px; }
+  .clients { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+  .client { display:flex; align-items:center; gap:14px; width:100%; text-align:left; border:1px solid rgba(42,68,104,.7);
+            background:linear-gradient(180deg,var(--card),#0F1E35); border-radius:var(--r); padding:14px; }
+  .client:active { transform:scale(.99); }
+  .avatar { width:48px; height:48px; border-radius:14px; display:grid; place-items:center; font-weight:800; font-size:18px;
+            color:white; flex:none; }
+  .client .name { font-weight:650; font-size:17px; }
+  .client .chev { margin-left:auto; color:var(--faint); }
+
+  .chips { display:flex; gap:8px; overflow-x:auto; margin:0 -18px 16px; padding:0 18px; scrollbar-width:none; }
+  .chips::-webkit-scrollbar { display:none; }
+  .chip { flex:none; border:1px solid var(--line); background:var(--card); border-radius:999px; padding:8px 14px;
+          font-size:15px; color:var(--muted); }
+  .chip.on { background:var(--text); color:var(--bg); border-color:var(--text); font-weight:700; }
+  .chip b { font-weight:700; margin-left:4px; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(155px,1fr)); gap:14px; }
+  .post { position:relative; border:0; padding:0; text-align:left; border-radius:var(--r); overflow:hidden;
+          background:var(--card); box-shadow:0 10px 26px rgba(0,0,0,.35); }
+  .post:active { transform:scale(.98); }
+  .post .img { aspect-ratio:4/5; background:var(--bg2) center/cover no-repeat; }
+  .post .info { padding:10px 12px 12px; border-top:1px solid rgba(42,68,104,.6); }
+  .post .t { font-weight:700; font-size:15px; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .post .meta { font-size:12.5px; color:var(--muted); margin-top:3px; }
+  .pill { position:absolute; top:10px; left:10px; font-size:11.5px; font-weight:700; border-radius:999px; padding:4px 9px;
+          backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+  .pill.ok { background:rgba(52,178,106,.85); color:white; }
+  .pill.wait { background:rgba(232,130,30,.9); color:white; }
+  .play { position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:50%; background:rgba(5,12,24,.6);
+          display:grid; place-items:center; }
+  .play svg { width:13px; height:13px; margin-left:2px; }
+
+  .proof { display:flex; align-items:center; gap:12px; padding:13px 14px; border-radius:14px; background:var(--card);
+           border:1px solid rgba(42,68,104,.7); color:var(--text); text-decoration:none; margin-bottom:8px; }
+  .proof .ic { width:36px; height:36px; border-radius:10px; background:rgba(232,107,107,.15); color:#F19999; display:grid;
+               place-items:center; font-size:11px; font-weight:800; flex:none; }
+  .proof span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:15px; }
+
+  /* one post */
+  .seg { display:flex; background:var(--bg2); border:1px solid var(--line); border-radius:14px; padding:4px; margin-bottom:14px; }
+  .seg button { flex:1; border:0; background:none; border-radius:10px; padding:10px 6px; font-size:14.5px; color:var(--muted); font-weight:600; }
+  .seg button.on { background:var(--card2); color:var(--text); box-shadow:0 2px 8px rgba(0,0,0,.3); }
+  .viewer { position:relative; }
+  .swipe { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:10px; scrollbar-width:none; border-radius:var(--r); }
+  .swipe::-webkit-scrollbar { display:none; }
+  .swipe > * { scroll-snap-align:center; flex:0 0 100%; width:100%; max-height:72vh; object-fit:contain; background:#050C18; border-radius:var(--r); }
+  .counter { position:absolute; top:12px; right:12px; background:rgba(5,12,24,.7); border-radius:999px; padding:4px 10px;
+             font-size:13px; font-weight:700; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
+  .dots { display:flex; justify-content:center; gap:6px; margin:12px 0 4px; }
+  .dots i { width:7px; height:7px; border-radius:50%; background:var(--line); transition:all .2s; }
+  .dots i.on { width:20px; border-radius:4px; background:var(--sky); }
+  .hint { text-align:center; color:var(--faint); font-size:13px; margin:4px 0 0; }
+  .caption { background:var(--card); border:1px solid rgba(42,68,104,.7); border-radius:var(--r); padding:16px;
+             white-space:pre-wrap; font-size:16px; line-height:1.5; min-height:80px; }
+  .caption.empty { color:var(--faint); }
+  .status { display:flex; align-items:center; gap:10px; background:var(--card); border-radius:14px; padding:12px 14px; margin-top:12px;
+            border:1px solid rgba(42,68,104,.7); font-size:15px; }
+  .status .dot { width:10px; height:10px; border-radius:50%; flex:none; }
+
+  .bar { position:fixed; left:0; right:0; bottom:0; z-index:15; padding:12px 18px calc(env(safe-area-inset-bottom) + 12px);
+         background:rgba(10,22,40,.9); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+         border-top:1px solid rgba(42,68,104,.6); display:flex; gap:10px; }
+  .bar .btn { padding:15px 10px; font-size:16px; }
+  .bar-inner { display:flex; gap:10px; width:100%; max-width:960px; margin:0 auto; }
+
+  .toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 96px); transform:translate(-50%,20px);
+           background:var(--text); color:var(--bg); padding:11px 18px; border-radius:999px; font-weight:650; font-size:15px;
+           opacity:0; transition:all .25s; z-index:30; pointer-events:none; max-width:90vw; text-align:center; }
+  .toast.show { opacity:1; transform:translate(-50%,0); }
+  .toast.bad { background:var(--red); color:white; }
+  .msg { color:var(--muted); font-size:15px; margin:6px 2px 14px; }
+  .msg.bad { color:var(--red); }
+  .empty-state { text-align:center; padding:40px 20px; color:var(--muted); }
+  .empty-state .big { font-size:42px; margin-bottom:8px; }
+  .skel { background:linear-gradient(90deg,var(--card) 0%,var(--card2) 50%,var(--card) 100%); background-size:200% 100%;
+          animation:sh 1.2s infinite; border-radius:var(--r); }
+  @keyframes sh { to { background-position:-200% 0; } }
+  @media (min-width:700px) { .swipe > * { flex-basis:70%; } .grid { grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); } }
+</style>
+</head>
+<body>
+<div class="stripe"></div>
+<header id="head"></header>
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const main = document.getElementById("main"), head = document.getElementById("head");
+const ICON = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="white"><path d="M7 4v16l13-8z"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+};
+const AVATARS = ["linear-gradient(135deg,#1477C2,#4FB3E8)", "linear-gradient(135deg,#E8821E,#F2B05E)",
+                 "linear-gradient(135deg,#2A9D5C,#5ED39A)", "linear-gradient(135deg,#6C4FD8,#A88BFA)",
+                 "linear-gradient(135deg,#C2417A,#F07DAE)", "linear-gradient(135deg,#0E7C86,#3CC6D0)"];
+let state = { client: null, posts: [], filter: "all", size: "4:5" };
+const IN_APP = navigator.userAgent.includes("RACPlanBuilderApp");     // the Android or iPhone/iPad app
+const STANDALONE = navigator.userAgent.includes("RACPlanBuilderDrive"); // the Android app working from Google Drive alone
+const WEB = true;                                                        // the iPad / web version (sw.js answers api/...)
+
+async function api(path, body) {
+  const options = body ? { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) } : {};
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { showCode(); throw new Error("signin"); }
+  if (!res.ok) throw new Error(data.error || "Something went wrong.");
+  return data;
+}
+function header(title, sub, onBack) {
+  head.innerHTML = "";
+  if (onBack) { const b = $(`<button class="back" aria-label="Back">${ICON.back}</button>`); b.onclick = onBack; head.append(b); }
+  head.append($(`<div class="titles"><h1>${esc(title)}</h1>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}</div>`));
+  if (!onBack) head.append($(`<img class="mark" src="logo.svg" alt="R.A.C.">`));
+  head.hidden = false;
+  document.querySelectorAll(".bar").forEach(b => b.remove());
+  main.innerHTML = ""; window.scrollTo(0, 0);
+}
+let toastTimer;
+function toast(text, bad) {
+  const t = document.getElementById("toast");
+  t.textContent = text; t.className = "toast show" + (bad ? " bad" : "");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = "toast", 2600);
+}
+function failed(error) { if (error.message !== "signin") { toast(error.message, true); logError(error.message); } }
+const file = (id, small) => "api/file?id=" + encodeURIComponent(id) + (small ? "&small=1" : "");
+const initials = (name) => name.split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w[0] || "")).slice(0, 2).map(w => w[0].toUpperCase()).join("") || "?";
+const colorFor = (name) => AVATARS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length];
+
+// ---------- sign in (Google, straight to Drive) ----------
+const HERE = new URL("./", location.href).href;           // where this app lives, e.g. https://plan.racdigitalcreations.com/
+const STORE = "planbuilder-settings";
+const SCOPE = "https://www.googleapis.com/auth/drive";
+const CLIENT_ID = ((window.PLAN_BUILDER || {}).googleClientId || "").trim();
+const saved = (k) => { try { return localStorage.getItem("pb_" + k) || ""; } catch (e) { return ""; } };
+const keep = (k, v) => { try { v ? localStorage.setItem("pb_" + k, v) : localStorage.removeItem("pb_" + k); } catch (e) {} };
+const rootName = () => saved("root") || (window.PLAN_BUILDER || {}).driveFolder || "RAC Clients";
+async function share(name, value) {                       // the background helper (sw.js) reads these
+  const cache = await caches.open(STORE);
+  if (value) await cache.put(HERE + "__" + name, new Response(value));
+  else await cache.delete(HERE + "__" + name);
+  navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage("reset");
+}
+function googleSignIn(quiet) {
+  const p = new URLSearchParams({ client_id: CLIENT_ID, redirect_uri: HERE, response_type: "token", scope: SCOPE,
+                                  include_granted_scopes: "true", state: quiet ? "quiet" : "ask" });
+  if (quiet) p.set("prompt", "none");
+  location.href = "https://accounts.google.com/o/oauth2/v2/auth?" + p;
+}
+function showCode(message, noQuiet) {
+  // Signed in before? Ask Google quietly for a fresh pass first (it lasts an hour), once per visit.
+  if (!message && !noQuiet && saved("signed") && CLIENT_ID && !sessionStorage.getItem("pb_tried")) {
+    sessionStorage.setItem("pb_tried", "1"); return googleSignIn(true);
+  }
+  head.hidden = true; main.innerHTML = ""; document.querySelectorAll(".bar").forEach(b => b.remove());
+  main.append($(`<div class="hero">
+    <img src="logo.svg" alt="R.A.C. digital creations" style="width:110px">
+    <h1>Plan Builder</h1>
+    <p>${CLIENT_ID ? "Sign in with the Google account that has your client folders." :
+        "Almost ready: put your Google Client ID in config.js (see the setup steps, Part 2)."}</p>
+    <div class="folder"><label for="root">Main Drive folder</label><input id="root" autocapitalize="words" autocomplete="off"></div>
+    <button class="btn" id="go" style="width:min(330px,100%);margin:0 auto" ${CLIENT_ID ? "" : "disabled"}>Sign in with Google</button>
+    ${message ? `<p class="muted" style="color:var(--red);margin-top:18px">${esc(message)}</p>` : ""}
+    <p class="setup">Address for Google Cloud setup: <b>${esc(HERE)}</b></p></div>`));
+  const box = document.getElementById("root");
+  box.value = rootName();
+  document.getElementById("go").onclick = async () => {
+    keep("root", box.value.trim() || "RAC Clients");
+    await share("root", rootName());
+    googleSignIn(false);
+  };
+}
+async function changeFolder() {
+  const name = prompt("The main Drive folder's exact name (the one in Plan Builder's Settings):", rootName());
+  if (name === null || !name.trim()) return;
+  keep("root", name.trim()); await share("root", name.trim()); showClients();
+}
+async function signOut() {
+  await share("token", ""); keep("signed", ""); sessionStorage.setItem("pb_tried", "1"); showCode("", true);
+}
+function logError(text) {                                  // the last 50 problems, kept on this device
+  try { const log = JSON.parse(localStorage.getItem("pb_errors") || "[]"); log.push(new Date().toISOString() + " " + text);
+        localStorage.setItem("pb_errors", JSON.stringify(log.slice(-50))); } catch (e) {}
+}
+
+// ---------- clients ----------
+async function showClients() {
+  header("Clients", "R.A.C. Plan Builder");
+  main.append($(`<div><input class="search" id="find" placeholder="Find a client" hidden>
+    <div class="clients" id="list">${'<div class="skel" style="height:78px"></div>'.repeat(4)}</div>
+    ${WEB ? `<p style="margin-top:26px;text-align:center"><a class="muted" style="color:var(--sky)" href="#" id="change">Change the Drive folder</a>
+             &nbsp;·&nbsp; <a class="muted" style="color:var(--sky)" href="#" id="signout">Sign out</a></p>
+             ${navigator.standalone ? "" : `<p class="muted" style="margin-top:14px;text-align:center">Tip: tap Share, then <b>Add to Home Screen</b>, to keep Plan Builder on your iPad's home screen.</p>`}`
+    : STANDALONE ? `<p style="margin-top:26px;text-align:center"><a class="muted" style="color:var(--sky)" href="racplanbuilder://change">Change the Drive folder</a></p>`
+    : IN_APP ? `<p style="margin-top:26px;text-align:center"><a class="muted" style="color:var(--sky)" href="racplanbuilder://change">Connect to a different computer</a></p>`
+             : `<p class="muted" style="margin-top:22px;text-align:center">Tip: tap Share, then <b>Add to Home Screen</b>, to keep Plan Builder on your home screen.</p>`}</div>`));
+  if (WEB) {
+    document.getElementById("change").onclick = (e) => { e.preventDefault(); changeFolder(); };
+    document.getElementById("signout").onclick = (e) => { e.preventDefault(); signOut(); };
+  }
+  try {
+    const { clients } = await api("api/clients");
+    const list = document.getElementById("list"), find = document.getElementById("find");
+    const draw = (words) => {
+      list.innerHTML = "";
+      const shown = clients.filter(n => n.toLowerCase().includes((words || "").toLowerCase()));
+      if (!clients.length) list.append($(`<div class="empty-state"><div class="big">📁</div>No client folders found in Google Drive.</div>`));
+      shown.forEach(name => {
+        const row = $(`<button class="client"><div class="avatar" style="background:${colorFor(name)}">${esc(initials(name))}</div>
+          <div class="name">${esc(name)}</div><div class="chev">${ICON.back.replace('d="m15 18-6-6 6-6"', 'd="m9 18 6-6-6-6"')}</div></button>`);
+        row.querySelector(".chev svg").style.cssText = "width:20px;height:20px";
+        row.onclick = () => showPosts(name);
+        list.append(row);
+      });
+    };
+    if (clients.length > 6) { find.hidden = false; find.oninput = () => draw(find.value); }
+    draw("");
+  } catch (e) { failed(e); }
+}
+
+// ---------- one client's posts ----------
+async function showPosts(client, keep) {
+  state.client = client;
+  header(client, "Finished posts", showClients);
+  main.append($(`<div><div class="chips" id="chips"></div>
+    <div class="grid" id="grid">${'<div class="skel" style="aspect-ratio:4/5"></div>'.repeat(4)}</div>
+    <h2>Proofs for approval</h2><div id="proofs"><div class="skel" style="height:62px"></div></div></div>`));
+  try {
+    if (!keep) state.posts = (await api("api/posts?client=" + encodeURIComponent(client))).posts;
+    drawPosts();
+  } catch (e) { failed(e); document.getElementById("grid").innerHTML = ""; }
+  try {
+    const { proofs } = await api("api/proofs?client=" + encodeURIComponent(client));
+    const box = document.getElementById("proofs");
+    box.innerHTML = proofs.length ? "" : '<p class="muted">No proofs yet. Make Proof on 4 Review puts them here.</p>';
+    proofs.forEach(p => box.append($(`<a class="proof" href="https://drive.google.com/file/d/${encodeURIComponent(p.id)}/view" target="_blank" rel="noopener"><div class="ic">PDF</div><span>${esc(p.name)}</span></a>`)));
+  } catch (e) { document.getElementById("proofs").innerHTML = ""; }
+}
+function drawPosts() {
+  const posts = state.posts, grid = document.getElementById("grid"), chips = document.getElementById("chips");
+  const waiting = posts.filter(p => !p.approved).length;
+  chips.innerHTML = "";
+  [["all", "All", posts.length], ["wait", "Waiting", waiting], ["ok", "Approved", posts.length - waiting]].forEach(([key, label, n]) => {
+    const c = $(`<button class="chip ${state.filter === key ? "on" : ""}">${label}<b>${n}</b></button>`);
+    c.onclick = () => { state.filter = key; drawPosts(); };
+    chips.append(c);
+  });
+  grid.innerHTML = "";
+  const shown = posts.filter(p => state.filter === "all" || (state.filter === "ok") === !!p.approved);
+  if (!posts.length) grid.replaceWith(Object.assign($(`<div class="empty-state" id="grid"><div class="big">🗂️</div>No finished posts yet.<br>Export posts on the computer (5 Export) and they show up here.</div>`)));
+  else if (!shown.length) grid.append($(`<div class="muted">Nothing here.</div>`));
+  shown.forEach(post => {
+    const set = post.sizes["4:5"] || post.sizes["9:16"] || {};
+    const slides = (set.images || []).length, video = Object.values(post.sizes).some(s => s.video);
+    const card = $(`<button class="post"><div class="img"></div>
+      <span class="pill ${post.approved ? "ok" : "wait"}">${post.approved ? "✓ Approved" : "Waiting"}</span>
+      ${video ? `<span class="play">${ICON.play}</span>` : ""}
+      <div class="info"><div class="t">${esc(post.name)}</div>
+      <div class="meta">${slides ? slides + (slides === 1 ? " slide" : " slides") : "Video"}${Object.keys(post.sizes).length > 1 ? " · both sizes" : ""}</div></div></button>`);
+    if (post.cover) card.querySelector(".img").style.backgroundImage = `url('${file(post.cover, true)}')`;
+    card.onclick = () => showPost(posts.indexOf(post));
+    grid.append(card);
+  });
+}
+
+// ---------- one post ----------
+function showPost(index) {
+  const post = state.posts[index];
+  if (!post.sizes[state.size]) state.size = Object.keys(post.sizes)[0];
+  header(post.name, state.client, () => showPosts(state.client, true));
+  const sizes = Object.keys(post.sizes).sort();
+  const label = { "4:5": "Instagram 4:5", "9:16": "Facebook · TikTok 9:16" };
+  main.append($(`<div>
+    <div class="seg" id="seg"></div>
+    <div class="viewer"><div class="swipe" id="swipe"></div><div class="counter" id="counter"></div></div>
+    <div class="dots" id="dots"></div>
+    <p class="hint">Swipe for more slides. Press and hold a slide to save it to Photos.</p>
+    <h2>Caption</h2><div class="caption empty" id="caption">Loading caption...</div>
+    <div class="status" id="status"></div></div>`));
+  const seg = document.getElementById("seg");
+  sizes.forEach(size => {
+    const b = $(`<button class="${size === state.size ? "on" : ""}">${label[size] || size}</button>`);
+    b.onclick = () => { state.size = size; showPost(index); };
+    seg.append(b);
+  });
+  if (sizes.length < 2) seg.remove();
+  const set = post.sizes[state.size], swipe = document.getElementById("swipe");
+  if (set.video) swipe.append($(`<video src="${file(set.video)}" controls playsinline preload="metadata"></video>`));
+  set.images.forEach(id => swipe.append($(`<img src="${file(id)}" loading="lazy" alt="">`)));
+  const total = swipe.children.length, dots = document.getElementById("dots"), counter = document.getElementById("counter");
+  for (let i = 0; i < total; i++) dots.append(document.createElement("i"));
+  const mark = () => {
+    const at = Math.round(swipe.scrollLeft / Math.max(1, swipe.children[0]?.offsetWidth + 10 || 1));
+    [...dots.children].forEach((d, i) => d.className = i === at ? "on" : "");
+    counter.textContent = `${Math.min(at + 1, total)} / ${total}`;
+  };
+  swipe.addEventListener("scroll", () => requestAnimationFrame(mark)); mark();
+  if (total < 2) { dots.remove(); counter.remove(); }
+
+  const status = () => {
+    const box = document.getElementById("status");
+    box.innerHTML = post.approved
+      ? `<span class="dot" style="background:var(--green)"></span>Client approved this post (both sizes).`
+      : `<span class="dot" style="background:var(--orange)"></span>Waiting for the client's OK.`;
+  };
+  status();
+  const caption = document.getElementById("caption");
+  let text = "";
+  if (set.caption) api("api/caption?id=" + encodeURIComponent(set.caption))
+    .then(d => { text = d.text; caption.textContent = text || "No caption saved for this post."; caption.classList.toggle("empty", !text); })
+    .catch(failed);
+  else caption.textContent = "No caption saved for this post.";
+
+  const bar = $(`<div class="bar"><div class="bar-inner">
+    <button class="btn ghost" id="copy">${ICON.copy}Copy Caption</button>
+    <button class="btn ${post.approved ? "done" : "green"}" id="approve">${ICON.check}${post.approved ? "Approved" : "Approve"}</button></div></div>`);
+  document.body.append(bar);
+  document.getElementById("copy").onclick = async () => {
+    if (!text) return toast("This post has no caption.", true);
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) { const t = document.createElement("textarea"); t.value = text; t.style.cssText = "position:fixed;opacity:0";
+                document.body.append(t); t.select(); t.setSelectionRange(0, 99999); document.execCommand("copy"); t.remove(); }
+    toast("Caption copied");
+  };
+  document.getElementById("approve").onclick = async () => {
+    if (post.approved) return toast("Already approved. Take it back with Mark Approved on the computer.");
+    try {
+      const r = await api("api/approve?client=" + encodeURIComponent(state.client) + "&post=" + encodeURIComponent(post.post),
+                          { client: state.client, post: post.post });
+      post.approved = r.approved; status();
+      const b = document.getElementById("approve"); b.className = "btn done"; b.innerHTML = ICON.check + "Approved";
+      toast("Marked approved");
+    } catch (e) { failed(e); }
+  };
+}
+
+async function start() {
+  if (!("serviceWorker" in navigator)) { main.innerHTML = '<p class="muted" style="padding:40px;text-align:center">Please open this page in Safari or Chrome.</p>'; return; }
+  try {
+    await navigator.serviceWorker.register("sw.js");
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise(done => { navigator.serviceWorker.addEventListener("controllerchange", done, { once: true }); setTimeout(done, 3000); });
+      if (!navigator.serviceWorker.controller) return location.reload();
+    }
+  } catch (e) { logError("helper: " + e.message); main.innerHTML = '<p class="muted" style="padding:40px;text-align:center">Couldn\'t start Plan Builder: ' + esc(e.message) + '</p>'; return; }
+  await share("root", rootName());
+  const answer = new URLSearchParams(location.hash.slice(1));
+  if (answer.has("access_token") || answer.has("error")) history.replaceState(null, "", location.pathname + location.search);
+  if (answer.has("access_token")) {
+    const until = Date.now() + (Number(answer.get("expires_in")) || 3600) * 1000 - 120000;
+    await share("token", answer.get("access_token") + " " + until);
+    keep("signed", "1"); sessionStorage.removeItem("pb_tried");
+  } else if (answer.has("error")) {
+    const why = answer.get("error");
+    if (answer.get("state") !== "quiet") { logError("Google sign-in: " + why); }
+    return showCode(answer.get("state") === "quiet" ? "" :
+      why === "access_denied" ? "Sign in was cancelled, or this Google account isn't allowed yet (see the setup steps, Part 3)."
+                              : "Google said: " + why, true);
+  }
+  showClients();
+}
+start();
+</script>
+</body>
+</html>

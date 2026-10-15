@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 56" width="48" height="56">
+  <!-- The R.A.C. mark: blue top, sky band, orange bottom -->
+  <path fill="#1477C2" d="M24 0 L48 14 L48 25 L0 25 L0 14 Z"/>
+  <path fill="#4FB3E8" d="M0 25 H48 V31 H0 Z"/>
+  <path fill="#E8821E" d="M0 31 H48 V42 L24 56 L0 42 Z"/>
+</svg>
