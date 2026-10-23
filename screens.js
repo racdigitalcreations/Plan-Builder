@@ -237,6 +237,8 @@ async function reviewScreen(keepScroll) {
   header("Check the posts", c.client + " · made by " + c.result.engine, optionsScreen);
   testBar();
   if (c.brand.notes.length) main.append($(`<p class="msg">Heads up: ${esc(c.brand.notes.join(", "))} isn't a free Google Font, so a close match is used here. The computer uses the real font.</p>`));
+  if (c.brand.template) main.append($(`<p class="msg">Made with their template, <b>${esc(c.brand.template.name)}</b>, the way the computer fills it. Google draws each preview, so it takes a few seconds. Save also keeps the filled PowerPoint deck in Posts &gt; Photo Posts, to change in PowerPoint if you like.</p>`));
+  if (c.brand.templateProblem) main.append($(`<p class="msg bad">${esc(c.brand.templateProblem)}</p>`));
   for (let i = 0; i < c.result.posts.length; i++) main.append(await postCard(c.result.posts[i], i));
   const bar = $(`<div class="bar"><div class="bar-inner"><button class="btn green" id="saveall">${ICON2.save}Save ${c.result.posts.length > 1 ? "All " : ""}to Final Posts</button></div></div>`);
   document.body.append(bar);
@@ -276,8 +278,8 @@ async function postCard(post, index) {
   const swipe = card.querySelector("[data-swipe]");
   let size = "4:5";
   const draw = async () => {
-    swipe.innerHTML = '<div class="skel" style="aspect-ratio:4/5"></div>';
-    const canvases = await MAKE.render(post, c.brand, size);
+    swipe.innerHTML = '<div class="skel" style="aspect-ratio:4/5"></div>' + (c.brand.template ? '<p class="muted" data-wait>Filling their template...</p>' : "");
+    const canvases = await MAKE.render(post, c.brand, size, (t) => { const w = swipe.querySelector("[data-wait]"); if (w) w.textContent = t; });
     swipe.innerHTML = "";
     canvases.forEach(cv => { const img = document.createElement("img"); img.src = cv.toDataURL("image/jpeg", 0.85); img.alt = ""; swipe.append(img); });
   };

@@ -346,6 +346,7 @@ ${info}`;
       post.hashtags = fixHashtags(post.hashtags);
       post.alt = Array.isArray(post.alt) ? post.alt.map(String) : [];
       post.tagline = String(post.tagline || "");
+      post.pool = photos.map(p => p.id);              // their template's extra photo spots use these
     }
     return { posts, tips: String(answer.tips || ""), engine: name };
   }
@@ -718,7 +719,21 @@ ${info}`, images, 3000));
     const logoId = logoFor(client, photos || []);
     if (logoId) { try { logoImg = await loadImage("api/file?id=" + encodeURIComponent(logoId)); } catch (e) {} }
     const notes = [head.standIn, sans.standIn].filter(Boolean);
-    return { kit, p, head, sans, logo: logoImg, client, notes: [...new Set(notes)] };
+    const B = { kit, p, head, sans, logo: logoImg, client, notes: [...new Set(notes)], decks: new Map() };
+    // Their own PowerPoint template (Brand Kit > Make every post look like: My template), like the computer uses it
+    if (kit.template_id && kit.look_from !== "kit" && typeof TEMPLATE !== "undefined") {
+      try {
+        const gslides = kit.template_mime === "application/vnd.google-apps.presentation";
+        const url = API + "/" + encodeURIComponent(kit.template_id) + (gslides
+          ? "/export?mimeType=" + encodeURIComponent("application/vnd.openxmlformats-officedocument.presentationml.presentation") : "?alt=media");
+        B.template = { bytes: await (await call("GET", url)).arrayBuffer(), name: kit.template_name || "their template" };
+        B.notes = [];                                    // the template's own fonts are used, not stand-ins
+      } catch (e) {
+        if (e.message === "signin") throw e;
+        B.templateProblem = `Couldn't open ${kit.template_name || "their template"} (${e.message}), so the Brand Kit design is used.`;
+      }
+    }
+    return B;
   }
 
   const pictures = new Map();
@@ -727,7 +742,8 @@ ${info}`, images, 3000));
     return pictures.get(id);
   }
   /** Draw a post's slides in one size. Returns canvases. */
-  async function render(post, B, sizeKey) {
+  async function render(post, B, sizeKey, say) {
+    if (B.template) return (await templateDeck(post, B, sizeKey, say)).canvases;
     const out = [];
     for (let i = 0; i < post.slides.length; i++) {
       const s = post.slides[i];
@@ -737,6 +753,62 @@ ${info}`, images, 3000));
     return out;
   }
   const jpeg = (canvas) => new Promise(done => canvas.toBlob(done, "image/jpeg", 0.92));
+
+  // ---------- their own template: filled like the computer fills it, then drawn by Google (template.js) ----------
+  function photoMaker(id) {                         // the photo cropped to fill a w x h spot (a bit above the middle)
+    return async (w, h) => {
+      const img = await picture(id);
+      const c = document.createElement("canvas");
+      c.width = 1600; c.height = Math.max(1, Math.round(1600 * h / w));
+      const k = Math.max(c.width / img.width, c.height / img.height);
+      c.getContext("2d").drawImage(img, (c.width - img.width * k) / 2, (c.height - img.height * k) * 0.42, img.width * k, img.height * k);
+      return { blob: await new Promise(d => c.toBlob(d, "image/jpeg", 0.88)), pixels: [c.width, c.height] };
+    };
+  }
+  async function blankPhoto(w, h) {                 // a spot with no photo: a plain frame to change in PowerPoint
+    const c = document.createElement("canvas");
+    c.width = 1200; c.height = Math.max(2, Math.round(1200 * h / w));
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#E9ECEF"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.setLineDash([14, 12]); ctx.strokeStyle = "#AEB6BF"; ctx.lineWidth = 3; ctx.strokeRect(24, 24, c.width - 48, c.height - 48);
+    ctx.fillStyle = "#6C757D"; ctx.textAlign = "center";
+    ctx.font = `${Math.max(24, Math.min(c.width, c.height) / 9 | 0)}px sans-serif`; ctx.fillText("PHOTO", c.width / 2, c.height * 0.48);
+    ctx.font = `${Math.max(16, Math.min(c.width, c.height) / 22 | 0)}px sans-serif`; ctx.fillText("Change Picture in PowerPoint", c.width / 2, c.height * 0.6);
+    return { blob: await new Promise(d => c.toBlob(d, "image/jpeg", 0.85)), pixels: [c.width, c.height] };
+  }
+  /** One post filled into their template for one size: the .pptx and Google's drawing of it (remembered until the post changes). */
+  async function templateDeck(post, B, sizeKey, say) {
+    const key = sizeKey + "|" + JSON.stringify([post.slides, post.pool]);
+    if (B.decks.has(key)) return B.decks.get(key);
+    const job = (async () => {
+      say && say(`Filling ${B.template.name} (${sizeKey})...`);
+      const s = await settings(), site = String(((s.client_info || {})[B.client] || {}).website || "").replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "");
+      const used = new Set(post.slides.map(x => x.photo && x.photo.id).filter(Boolean));
+      const plan = post.slides.map(x => ({ title: x.title, body: x.body, eyebrow: x.eyebrow, button: x.button, num: x.num, items: x.items || [],
+                                           label: x.label, layout: x.layout, image: x.photo ? photoMaker(x.photo.id) : null }));
+      // their template's other photo spots: the picked photos not on a slide yet first, then the picked photos again
+      // (a real photo of theirs beats an empty frame); a blank frame only when no photos were picked
+      const pool = post.pool && post.pool.length ? post.pool : [...used];
+      const spare = pool.filter(id => !used.has(id)).concat(...Array(6).fill(pool)).map(photoMaker);
+      const last = post.slides[post.slides.length - 1] || {};
+      const made = await TEMPLATE.build(B.template.bytes, plan, spare, blankPhoto,
+                                        { website: site, contact: B.kit.contact || "", button: last.button || "Book now" }, sizeKey);
+      say && say(`Google is drawing the slides (${sizeKey})...`);
+      const form = new FormData();          // a temporary Google Slides copy, only to turn it into pictures
+      form.append("metadata", new Blob([JSON.stringify({ name: "Plan Builder iPad - temporary preview", parents: [await rootId()],
+                                                         mimeType: "application/vnd.google-apps.presentation" })], { type: "application/json" }));
+      form.append("file", made.blob);
+      const temp = (await (await call("POST", UPLOAD + "?uploadType=multipart&fields=id", form)).json()).id;
+      let pdf;
+      try { pdf = await (await call("GET", API + "/" + encodeURIComponent(temp) + "/export?mimeType=application/pdf")).arrayBuffer(); }
+      finally { await call("DELETE", API + "/" + encodeURIComponent(temp)).catch(() => {}); }
+      const canvases = await pdfCanvases(pdf, say || (() => {}));
+      return { blob: made.blob, notes: made.notes, canvases: canvases.slice(0, post.slides.length) };
+    })();
+    B.decks.set(key, job);
+    job.catch(() => B.decks.delete(key));
+    return job;
+  }
 
   /** Save a post to Final Posts / Photo Posts / <size> / <title> (in Testing in Test mode), both sizes.
    *  replacing: the post's own folder ids (remaking it), so its old JPGs are swapped for the new ones. */
@@ -757,7 +829,15 @@ ${info}`, images, 3000));
     for (const sizeKey of ["4:5", "9:16"]) {
       const size = SIZES[sizeKey];
       say(`Drawing the ${sizeKey === "4:5" ? "Instagram 4:5" : "Facebook / TikTok 9:16"} slides...`);
-      const canvases = await render(post, B, sizeKey);
+      const canvases = await render(post, B, sizeKey, say);
+      if (B.template) {                 // the filled deck too, in Posts > Photo Posts, so it can be changed in PowerPoint
+        const deck = await templateDeck(post, B, sizeKey);
+        const run = await folder(await folder(await folder(home, "Posts"), "Photo Posts"), `${today()} - iPad (Template)`);
+        const into = await folder(await folder(run, "PowerPoint"), size.folder);
+        const deckName = `Post - ${title} - ${size.tag}.pptx`;
+        for (const f of await children(into)) if (f.name === deckName) await trash(f.id).catch(() => {});
+        await upload(into, deckName, deck.blob, "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+      }
       const target = (replacing && replacing[sizeKey]) || await folder(await folder(photoPosts, size.folder), title);
       const old = await children(target);
       for (const f of old) {          // a remake replaces the JPGs, the caption and the slide plan
@@ -824,6 +904,9 @@ ${info}`, images, 3000));
     let data;
     try { data = await (await call("GET", API + "/" + encodeURIComponent(copy.id) + "/export?mimeType=application/pdf")).arrayBuffer(); }
     finally { await call("DELETE", API + "/" + encodeURIComponent(copy.id)).catch(() => {}); }   // the temporary copy only
+    return pdfCanvases(data, say);
+  }
+  async function pdfCanvases(data, say) {
     const lib = await pdfReader();
     const doc = await lib.getDocument({ data }).promise;
     const out = [];
