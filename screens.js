@@ -11,6 +11,8 @@ const ICON2 = {
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
   share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
   present: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg>',
+  clips: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg>',
   save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
 };
 const LAYOUT_NAMES = { hook: "Hook (big photo)", statement: "Statement (dark)", split: "Photo beside words", tip: "Tip (photo on top)",
@@ -65,6 +67,12 @@ async function showSettings() {
       <input id="ck" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${has("claude_key") ? "Saved. Type a new one to replace it." : "sk-ant-..."}"></div>
     <div class="row2"><button class="btn" id="savekeys">Save Keys</button><button class="btn ghost" id="forget">Remove Keys</button></div>
     <p class="muted" style="margin-top:14px">Good idea: set a monthly spending limit for the Claude key at console.anthropic.com (Settings &gt; Limits).</p>
+    <h2>Opus (OpusClip)</h2>
+    <p class="muted">For Opus Clips on each client's screen. Copy the key from the Opus dashboard (lower-left corner). It stays on this iPad only.</p>
+    <div class="field"><label for="ok2">Opus key ${has("opus_key") ? '<span class="ok">✓ saved</span>' : ""}</label>
+      <input id="ok2" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${has("opus_key") ? "Saved. Type a new one to replace it." : "Opus API key"}"></div>
+    <div class="row2"><button class="btn" id="saveopus">Save Opus Key</button><button class="btn ghost" id="checkopus">Check Opus</button></div>
+    <p class="muted" id="opusmsg"></p>
     <h2>Brand Kits</h2>
     <p class="muted" id="kits">Checking...</p>
     <h2>Problems</h2>
@@ -79,9 +87,22 @@ async function showSettings() {
     if (c) MAKE.setLocal("claude_key", c.replace(/^["']|["']$/g, ""));
     toast("Saved on this iPad"); showSettings();
   };
+  document.getElementById("saveopus").onclick = () => {
+    const k = document.getElementById("ok2").value.trim().replace(/^["']|["']$/g, "");
+    if (!k) return toast("Type the Opus key first.", true);
+    MAKE.setLocal("opus_key", k); toast("Saved on this iPad"); showSettings();
+  };
+  document.getElementById("checkopus").onclick = async () => {
+    const msg = document.getElementById("opusmsg"), typed = document.getElementById("ok2").value.trim().replace(/^["']|["']$/g, "");
+    if (typed) MAKE.setLocal("opus_key", typed);
+    if (!OPUS.key()) return toast("Type the Opus key first.", true);
+    msg.className = "muted"; msg.textContent = "Checking...";
+    try { const r = await OPUS.checkConnection(); msg.className = r.ok ? "msg" : "msg bad"; msg.textContent = (r.ok ? "✓ " : "") + r.text; }
+    catch (e) { msg.className = "msg bad"; msg.textContent = e.message; logError("Check Opus: " + e.message); MAKE.logToDrive(new Date().toISOString() + " Check Opus: " + e.message); }
+  };
   document.getElementById("forget").onclick = () => {
-    if (!confirm("Remove both AI keys from this iPad?")) return;
-    MAKE.setLocal("gemini_key", ""); MAKE.setLocal("claude_key", ""); toast("Keys removed"); showSettings();
+    if (!confirm("Remove the AI and Opus keys from this iPad?")) return;
+    MAKE.setLocal("gemini_key", ""); MAKE.setLocal("claude_key", ""); MAKE.setLocal("opus_key", ""); toast("Keys removed"); showSettings();
   };
   try {
     const s = await MAKE.settings(true), n = Object.keys(s.brand_kits || {}).length, kits = document.getElementById("kits");
@@ -441,11 +462,14 @@ async function clientInfo(client) {
     if (site) rows.push(`<div><b>Website</b><a class="link" href="${esc(href)}" target="_blank" rel="noopener">${esc(site)}</a></div>`);
     if (kit.contact) rows.push(`<div><b>Contact line</b>${esc(kit.contact)}</div>`);
     if (boxes.notes) rows.push(`<div><b>Notes</b>${esc(boxes.notes)}</div>`);
-    if (f.strategy) rows.push(`<div><b>Strategy</b><a class="link" href="https://docs.google.com/document/d/${encodeURIComponent(f.strategy.id)}/edit" target="_blank" rel="noopener">${esc(f.strategy.name)}</a></div>`);
+    rows.push(`<div><b>Strategy</b>${f.strategy ? `<a class="link" href="https://docs.google.com/document/d/${encodeURIComponent(f.strategy.id)}/edit" target="_blank" rel="noopener">${esc(f.strategy.name)}</a> · ` : ""}<a class="link" href="#" id="mkstrategy">${f.strategy ? "Write a new one" : "Write one with AI"}</a></div>`);
+    rows.push(brandKitRow(client, s));
     rows.push(`<div><b>Drive</b><a class="link" href="${driveFolder(f.id)}" target="_blank" rel="noopener">Open ${esc(client)}'s folder</a>${f.testing ? ` · <a class="link" href="${driveFolder(f.testing)}" target="_blank" rel="noopener">Testing folder</a>` : ""}</div>`);
     if (about) about.innerHTML = `<div class="info">${rows.join("")}</div>
       <h2>Notes</h2><div class="info" id="notes"><span class="muted">Loading...</span></div>
       <div class="row2"><button class="btn ghost" id="addnote">${ICON2.pencil}Add a Note</button></div>`;
+    const mk = document.getElementById("mkstrategy");
+    if (mk) mk.onclick = (e) => { e.preventDefault(); makeStrategy(client); };
     const addBtn = document.getElementById("addnote");
     if (addBtn) addBtn.onclick = () => addNoteBox(client);
     drawNotes(client);
@@ -594,4 +618,146 @@ async function showToClient(client) {
     };
   };
   show();
+}
+
+// ---------- reading a Strategy or Pitch Kit on the iPad (simple Markdown: headings, bullets, bold) ----------
+function markdown(md) {
+  const inline = (t) => esc(t).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|\W)\*([^*\s][^*]*)\*(?=\W|$)/g, "$1<i>$2</i>");
+  const out = [];
+  let list = "";
+  const close = () => { if (list) { out.push(`</${list}>`); list = ""; } };
+  for (const raw of String(md || "").split("\n")) {
+    const line = raw.trimEnd();
+    let m;
+    if ((m = line.match(/^(#{1,4})\s+(.*)$/))) { close(); out.push(`<h${Math.min(m[1].length + 2, 6)}>${inline(m[2])}</h${Math.min(m[1].length + 2, 6)}>`); }
+    else if ((m = line.match(/^\s*[-*•]\s+(.*)$/))) { if (list !== "ul") { close(); out.push("<ul>"); list = "ul"; } out.push(`<li>${inline(m[1])}</li>`); }
+    else if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) { if (list !== "ol") { close(); out.push("<ol>"); list = "ol"; } out.push(`<li>${inline(m[1])}</li>`); }
+    else if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) { close(); out.push("<hr>"); }
+    else if (line.trim()) { close(); out.push(`<p>${inline(line)}</p>`); }
+    else close();
+  }
+  close();
+  return `<div class="docview">${out.join("")}</div>`;
+}
+const docUrl = (id) => "https://docs.google.com/document/d/" + encodeURIComponent(id) + "/edit";
+function docSheet(title, md, links) {
+  const sheet = $(`<div class="sheet"><div class="sheet-in"><div class="sheet-head"><b></b><button class="mini" data-close>Close</button></div>
+    <div class="row2 doclinks"></div>${markdown(md)}</div></div>`);
+  sheet.querySelector(".sheet-head b").textContent = title;
+  (links || []).forEach(([label, href]) => {
+    const a = $(`<a class="btn ghost" target="_blank" rel="noopener"></a>`);
+    a.textContent = label; a.href = href;
+    sheet.querySelector(".doclinks").append(a);
+  });
+  sheet.querySelector("[data-close]").onclick = () => sheet.remove();
+  document.body.append(sheet);
+}
+
+// ---------- Make Strategy (client screen > About this client) ----------
+async function makeStrategy(client) {
+  const ai = MAKE.engine() === "claude" ? "Claude" : "Gemini";
+  if (!confirm(`Write a fresh strategy for ${client} with ${ai}? It reads their notes and current strategy, and saves a new Strategy doc` +
+               `${MAKE.testMode() ? " in their Testing folder" : " in their folder (Create Posts uses the newest one)"}.`)) return;
+  const { box, say } = busyBox("Starting...");
+  box.className = "busy overlay"; document.body.append(box);
+  try {
+    const made = await MAKE.strategy(client, MAKE.testMode(), say);
+    box.remove();
+    toast("Strategy saved in Drive");
+    docSheet(made.title, made.doc, [["Open in Google Docs", docUrl(made.id)]]);
+    if (state.client === client) clientInfo(client);
+  } catch (e) { box.remove(); fail(e, "Make Strategy"); }
+}
+
+// ---------- New Client (the + on the Clients screen) ----------
+function showNewClient() {
+  header("New Client", "Makes their folder in Google Drive", showClients);
+  let logo = null;
+  main.append($(`<div>
+    <p class="msg">Makes the client's folder in your main Drive folder, with the same folders inside that the computer uses
+    (Client Info, Brand, Raw Photos, Raw Video, Posts, Final Posts and the rest). What you type here goes in their iPad Notes,
+    which Create Posts and Make Strategy read. Their Brand Kit is still set up on the computer.</p>
+    <div class="field"><label for="nc-name">Client name (their folder's name)</label><input id="nc-name" autocomplete="off" placeholder="Webster Therapeutics"></div>
+    <div class="field"><label for="nc-site">Website</label><input id="nc-site" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="example.com"></div>
+    <div class="field"><label for="nc-contact">Contact line for posts</label><input id="nc-contact" autocomplete="off" placeholder="Call 417-555-0100 · example.com"></div>
+    <div class="field"><label for="nc-notes">Notes</label><textarea class="text" id="nc-notes" rows="5" placeholder="What they do, where, who their customers are, what they want from social media..."></textarea></div>
+    <div class="row2"><button class="btn ghost" id="nc-logo">${ICON2.camera}Logo Photo (optional)</button></div>
+    <p class="muted" id="nc-logoname"></p>
+    <div class="row2"><button class="btn green" id="nc-make">${ICON2.plus}Make Client</button></div></div>`));
+  document.getElementById("nc-logo").onclick = () => pickFiles((files) => { logo = files[0]; document.getElementById("nc-logoname").textContent = "Logo: " + (logo.name || "photo"); });
+  document.getElementById("nc-make").onclick = async () => {
+    const value = (id) => document.getElementById(id).value;
+    if (!value("nc-name").trim()) return toast("Type the client's name first.", true);
+    const { box, say } = busyBox("Starting...");
+    box.className = "busy overlay"; document.body.append(box);
+    try {
+      const made = await MAKE.newClient(value("nc-name"), { website: value("nc-site"), contact: value("nc-contact"), notes: value("nc-notes") }, logo, say);
+      box.remove();
+      toast(`${made.name} is ready in Drive`);
+      showPosts(made.name);
+    } catch (e) { box.remove(); fail(e, "New Client"); }
+  };
+}
+
+// ---------- Pitch a Business (Clients screen): Strategy + Pitch Kit in RAC Prospects, like Pitch on the computer ----------
+async function showPitch() {
+  header("Pitch a Business", "Strategy and Pitch Kit, saved in RAC Prospects", showClients);
+  main.append($(`<div>
+    <p class="msg">Type what you know about the business. The AI writes their strategy, then the Pitch Kit: sample posts, a pitch email
+    and talking points. Both are saved as Google Docs in <b>RAC Prospects</b> (next to RAC Clients), and you can read them right here
+    in the meeting. The iPad can't read their website, so put the important facts in the notes.</p>
+    <div class="field"><label for="pp-site">Their website (optional)</label><input id="pp-site" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="example.com"></div>
+    <div class="field"><label for="pp-notes">What you know about them</label><textarea class="text" id="pp-notes" rows="7" placeholder="Business: Smith Bakery, Springfield MO. Family owned since 1990. Custom cakes and fresh bread. Posts on Facebook about once a month..."></textarea></div>
+    <div class="row2"><button class="btn" id="pp-go">${ICON2.spark}Write the Pitch</button></div>
+    <div id="pp-out"></div>
+    <h2>Recent prospects</h2><div id="pp-list"><div class="skel" style="height:56px"></div></div></div>`));
+  document.getElementById("pp-go").onclick = async () => {
+    const site = document.getElementById("pp-site").value.trim(), notes = document.getElementById("pp-notes").value.trim();
+    if (!notes && !site) return toast("Type their website or some notes first.", true);
+    if (!notes) toast("Tip: notes help a lot, since the iPad can't read the website.");
+    const { box, say } = busyBox("Starting...");
+    box.className = "busy overlay"; document.body.append(box);
+    try {
+      const r = await MAKE.pitch(site, notes, say);
+      box.remove();
+      toast(`Saved in RAC Prospects > ${r.name}`);
+      const out = document.getElementById("pp-out");
+      if (!out) return;
+      out.innerHTML = `<h2>${esc(r.name)}</h2><div class="row2"><a class="btn ghost" target="_blank" rel="noopener" href="${docUrl(r.pitchId)}">Open the Pitch Kit</a>
+        <a class="btn ghost" target="_blank" rel="noopener" href="${docUrl(r.planId)}">Open the Strategy</a>
+        <a class="btn ghost" target="_blank" rel="noopener" href="${driveFolder(r.folder)}">${ICON2.folder}Their Folder</a></div>
+        ${markdown(r.kit)}<hr><h3>Their Strategy</h3>${markdown(r.plan)}
+        <p class="muted">When they say yes: tap + on the Clients screen to make their client folder.</p>`;
+      out.scrollIntoView({ behavior: "smooth" });
+      drawProspects();
+    } catch (e) { box.remove(); fail(e, "Pitch a Business"); }
+  };
+  drawProspects();
+}
+async function drawProspects() {
+  const list = document.getElementById("pp-list");
+  if (!list) return;
+  try {
+    const found = await MAKE.prospects();
+    if (!document.getElementById("pp-list")) return;
+    list.innerHTML = found.length ? "" : `<p class="muted">None yet.</p>`;
+    found.forEach(f => {
+      const row = $(`<div class="deck"><div class="ic">PITCH</div><div class="nm"><div></div><div></div></div><a class="mini" target="_blank" rel="noopener">Open</a></div>`);
+      row.querySelector(".nm div").textContent = f.name;
+      row.querySelector(".nm div + div").textContent = f.modifiedTime ? "changed " + new Date(f.modifiedTime).toLocaleDateString() : "";
+      row.querySelector("a").href = driveFolder(f.id);
+      list.append(row);
+    });
+  } catch (e) { list.innerHTML = ""; if (e.message !== "signin") logError("prospects: " + e.message); }
+}
+
+// ---------- the client's Brand Kit (set on the computer), shown in About this client ----------
+function brandKitRow(client, s) {
+  const kit = (s.brand_kits || {})[client];
+  if (!kit) return `<div><b>Brand Kit</b><span class="muted">Not set up yet. Make it on the computer (Brand Kit), and it shows here.</span></div>`;
+  const dots = ["bg", "text", "accent", "dark"].filter(k => /^#?[0-9a-f]{3,6}$/i.test(String(kit[k] || "").trim()))
+    .map(k => `<span class="swatch" title="${esc(k)}" style="background:${esc(kit[k].startsWith("#") ? kit[k] : "#" + kit[k])}"></span>`).join("");
+  const fonts = [kit.serif, kit.sans].filter(Boolean).map(esc).join(" + ");
+  const logo = ((s.logo_files || {})[client] || {}).id;
+  return `<div class="kitrow"><b>Brand Kit</b>${dots}${fonts ? `<span>${fonts}</span>` : ""}${logo ? `<img class="kitlogo" alt="logo" src="api/file?id=${encodeURIComponent(logo)}&small=1">` : ""}</div>`;
 }

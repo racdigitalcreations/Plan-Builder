@@ -910,6 +910,147 @@ ${info}`, images, 3000));
   }
   const docLink = async (client) => { const id = await notesDoc(client, false); return id ? "https://docs.google.com/document/d/" + id + "/edit" : ""; };
 
+  // ---------- documents: Strategy and Pitch Kit (the computer's own prompts, from plan_builder.py) ----------
+  const PLAN_PROMPT = `You are an experienced social media strategist helping a small local agency
+pitch a new client. Using the business information below, write a practical social media plan.
+
+Include these sections:
+1. Business Snapshot - what they do, who their customers are, what makes them different
+2. Recommended Platforms - which 2-3 platforms fit best and why
+3. Brand Voice - how their posts should sound, with a few example phrases
+4. Content Pillars - 4-5 recurring themes for posts, each with 2 post ideas
+5. Posting Schedule - how often on each platform
+6. Quick Wins - 3 things they could do in the first 30 days
+7. Gaps or Questions - anything unclear from their info that we should ask them
+
+Keep it clear and friendly. Avoid jargon. The reader is a small business owner.
+
+BUSINESS INFORMATION:
+{business_info}
+`;
+  const PITCH_PROMPT = `You are a social media strategist at a small local agency, preparing for a pitch
+meeting with a potential client. Using the business information below, create a Pitch Kit.
+
+# Pitch Kit
+
+## Sample Posts
+Write {num_posts} ready-to-post sample posts in the business's own voice. Mix platforms that fit
+the business (Instagram, Facebook, and others if they make sense) and mix post types
+(educational, behind-the-scenes, promotional, community, testimonial-style). For each post include:
+- **Platform & type**
+- **Caption** - ready to copy and paste; use emojis only if they suit the brand
+- **Hashtags** - 5 to 10, mixing local and niche tags
+- **Visual idea** - the photo, video or graphic that should go with it
+- **Why it works** - one sentence on the strategy, to say out loud in the meeting
+
+## Pitch Email
+A short, warm email to the business owner (under 150 words), with a subject line.
+Mention something specific about their business, the opportunity you see, and offer to
+walk them through the sample posts. Sign it as: {signature}
+
+## Talking Points
+3 to 5 short points to bring up in the meeting.
+
+Only use facts found in the business information. Never invent reviews, awards, prices,
+statistics or client stories; put anything that would need confirming in [square brackets].
+
+BUSINESS INFORMATION:
+{business_info}
+`;
+  const DOC_ANSWER = '\n\nWrite it in Markdown (# and ## headings, - bullets, **bold**). Answer with JSON only: {"doc": "<the whole document in Markdown>"}';
+  async function askDoc(prompt) {
+    const text = await ask(prompt + DOC_ANSWER, [], 8000);
+    let doc = "";
+    try { doc = readJson(text).doc || ""; } catch (e) { doc = text.trim().startsWith("{") ? "" : text; }
+    doc = String(doc).trim();
+    if (!doc) throw new Error("The AI's answer came back empty. Try again.");
+    return doc;
+  }
+  /** A Google Doc made from Markdown (headings and bullets come out formatted), like save_doc on the computer. */
+  async function saveDoc(parent, title, markdown) {
+    for (const type of ["text/markdown", "text/plain"]) {
+      try {
+        const form = new FormData();
+        form.append("metadata", new Blob([JSON.stringify({ name: title, parents: [parent], mimeType: DOC })], { type: "application/json" }));
+        form.append("file", new Blob([markdown], { type }));
+        return (await (await call("POST", UPLOAD + "?uploadType=multipart&fields=id", form)).json()).id;
+      } catch (e) { if (e.message === "signin" || type === "text/plain") throw e; }
+    }
+  }
+  /** A fresh Strategy for a client, saved next to their folders as "<client> - Strategy - <date>" (Create Posts reads the newest). */
+  async function strategy(client, test, say) {
+    say("Getting what we know about them...");
+    const info = await businessInfo(client);
+    say("Writing their strategy... (up to a minute)");
+    const doc = await askDoc(PLAN_PROMPT.replace("{business_info}", info));
+    let parent = await clientId(client);
+    if (test) parent = await folder(parent, "Testing");
+    const title = `${client} - Strategy - ${today()}`;
+    const id = await saveDoc(parent, title, doc);
+    refreshed();
+    return { id, title, doc };
+  }
+  /** RAC Prospects sits next to RAC Clients, like on the computer. */
+  async function prospectsFolder() {
+    const root = await rootId();
+    const meta = await (await call("GET", API + "/" + encodeURIComponent(root) + "?fields=parents")).json();
+    return folder((meta.parents || [])[0] || "root", "RAC Prospects");
+  }
+  function prospectName(website, notes) {
+    const site = String(website || "").trim();
+    if (site) { try { return new URL(/^https?:/i.test(site) ? site : "https://" + site).hostname.replace(/^www\./, ""); } catch (e) {} }
+    return safeName(String(notes || "").split("\n")[0].replace(/^\s*business\s*:\s*/i, "").split(",")[0].slice(0, 40)) || "New prospect";
+  }
+  /** Pitch a Business: their Strategy, then the Pitch Kit built on it, both in RAC Prospects / <name>. */
+  async function pitch(website, notes, say) {
+    const name = prospectName(website, notes);
+    const info = [website ? "Website: " + website.trim() : "", notes ? "Notes from the agency:\n" + notes.trim() : ""].filter(Boolean).join("\n")
+      + "\n(Their website wasn't read for this: only use what's written here.)";
+    say("Opening RAC Prospects in Drive...");
+    const dir = await folder(await prospectsFolder(), name);
+    say("Step 1 of 2: writing their strategy... (up to a minute)");
+    const plan = await askDoc(PLAN_PROMPT.replace("{business_info}", info));
+    const planId = await saveDoc(dir, `${name} - Strategy - ${today()}`, plan);
+    say("Step 2 of 2: writing the pitch: sample posts, email and talking points... (up to a minute)");
+    const s = await settings();
+    const kit = await askDoc(PITCH_PROMPT.replace("{num_posts}", String(s.num_posts || "5"))
+      .replace("{signature}", String(s.signature || "").trim() || "[Your name and agency]")
+      .replace("{business_info}", info + "\n\nSOCIAL MEDIA PLAN ALREADY DRAFTED FOR THIS CLIENT:\n" + plan));
+    const pitchId = await saveDoc(dir, `${name} - Pitch - ${today()}`, kit);
+    return { name, folder: dir, planId, pitchId, plan, kit };
+  }
+  /** Recent prospects (newest first), each with its Strategy and Pitch docs. */
+  async function prospects() {
+    const dir = await prospectsFolder();
+    const url = API + "?q=" + encodeURIComponent(`'${dir}' in parents and mimeType = '${FOLDER}' and trashed = false`)
+      + "&pageSize=200&fields=files(id,name,modifiedTime)";
+    const found = ((await (await call("GET", url)).json()).files || []).sort((a, b) => (a.modifiedTime || "") < (b.modifiedTime || "") ? 1 : -1);
+    return found.slice(0, 15);
+  }
+
+  // ---------- New Client: their folder, with the computer's usual folders inside ----------
+  const CLIENT_FOLDERS = ["Client Info", "Brand", "Templates", "Inspiration", "Raw Photos", "Raw Video", "Finished Video", "Posts",
+                          "Final Posts", "Plan Builder Proofs"];
+  async function newClient(name, details, logo, say) {
+    name = String(name || "").replace(/[\\/:*?"<>|#]/g, " ").replace(/\s+/g, " ").trim();
+    if (!name) throw new Error("Type the client's name first.");
+    const root = await rootId();
+    if (await findFolder(root, name)) throw new Error(`There's already a client folder named ${name}.`);
+    say("Making their folder...");
+    const id = await folder(root, name);
+    for (const f of CLIENT_FOLDERS) await folder(id, f);
+    const lines = [["Website", details.website], ["Contact line", details.contact], ["Notes", details.notes]]
+      .filter(([, v]) => String(v || "").trim()).map(([k, v]) => `${k}: ${String(v).trim()}`);
+    if (lines.length) { say("Saving their notes..."); await addNote(name, "New client. " + lines.join("\n")); }
+    if (logo) {
+      say("Saving their logo...");
+      const ext = ((logo.name || "").split(".").pop() || "jpg").toLowerCase();
+      await upload(await folder(id, "Brand"), `${name} logo.${ext}`, new Blob([await logo.arrayBuffer()], { type: logo.type || "image/jpeg" }), logo.type || "image/jpeg");
+    }
+    refreshed();
+    return { id, name };
+  }
+
   // ---------- changes the client asked for (Show to Client > Needs Changes), in the main folder ----------
   const FEEDBACK = "Plan Builder iPad Feedback.json";
   async function feedbackFile() {
@@ -945,5 +1086,8 @@ ${info}`, images, 3000));
 
   return { SIZES, settings, engine, testMode, local, setLocal, plan, brand, render, drawSlide, save, saveCaption, rewriteCaption,
            addPhotos, captionText, fixHashtags, picture, photoUrl, logToDrive, Refused, palette, brandKit, safeName,
-           deckToFinal, slideFiles, notes, addNote, docLink, feedback, askChanges, clearChanges, changeKey };
+           deckToFinal, slideFiles, notes, addNote, docLink, feedback, askChanges, clearChanges, changeKey,
+           strategy, pitch, prospects, newClient, saveDoc,
+           drive: { API, UPLOAD, FOLDER, DOC, call, token, signedIn, children, findFolder, folder, upload, replaceText, trash, rootId,
+                    clientId, refreshed, today, q } };   // for opus.js
 })();

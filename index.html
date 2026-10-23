@@ -15,6 +15,7 @@
 <script src="config.js"></script>
 <script src="make.js"></script>
 <script src="screens.js"></script>
+<script src="opus.js"></script>
 <title>Plan Builder</title>
 <style>
   :root { --bg:#0A1628; --bg2:#0D1B30; --card:#12223A; --card2:#1A2F4D; --line:#2A4468; --text:#EAF2FA;
@@ -164,7 +165,7 @@
   .toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 96px); transform:translate(-50%,20px);
            background:var(--text); color:var(--bg); padding:11px 18px; border-radius:999px; font-weight:650; font-size:15px;
            opacity:0; transition:all .25s; z-index:30; pointer-events:none; max-width:90vw; text-align:center; }
-  .toast.show { opacity:1; transform:translate(-50%,0); }
+  .toast.on { opacity:1; transform:translate(-50%,0); }
   .toast.bad { background:var(--red); color:white; }
   .msg { color:var(--muted); font-size:15px; margin:6px 2px 14px; }
   .msg.bad { color:var(--red); }
@@ -198,6 +199,19 @@
   .field .ok { color:#7fd6a0; font-weight:700; margin-left:6px; }
   .switch-row { display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--card); border:1px solid rgba(42,68,104,.7);
                 border-radius:14px; padding:14px; font-size:16px; }
+  .check-row { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid rgba(42,68,104,.7); border-radius:12px; padding:12px 14px; margin-bottom:8px; font-size:15px; }
+  .check-row > span { flex:1; min-width:0; overflow-wrap:anywhere; } .check-row input { width:24px; height:24px; accent-color:#E8821E; flex:none; }
+  .check-row .muted { font-size:13px; } .check-row .mini { text-decoration:none; color:var(--text); flex:none; }
+  .opts { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; margin:14px 0 4px; }
+  .opts b { display:block; font-size:14px; color:var(--muted); font-weight:600; margin:0 0 6px 4px; }
+  .docview { background:var(--card); border:1px solid rgba(42,68,104,.7); border-radius:14px; padding:6px 18px 14px; margin:12px 0; font-size:16px; line-height:1.5; }
+  .docview h3 { font-size:21px; margin:16px 0 6px; } .docview h4 { font-size:18px; margin:14px 0 4px; color:#F2A65A; } .docview h5, .docview h6 { font-size:16px; margin:12px 0 4px; }
+  .docview p { margin:6px 0; } .docview ul, .docview ol { margin:6px 0; padding-left:22px; } .docview li { margin:3px 0; }
+  .docview hr { border:0; border-top:1px solid rgba(42,68,104,.9); margin:14px 0; }
+  .doclinks .btn { text-decoration:none; }
+  .kitrow { display:flex; align-items:center; flex-wrap:wrap; gap:8px; } .kitrow + div, div + .kitrow { margin-top:8px; }
+  .swatch { width:26px; height:26px; border-radius:8px; border:1px solid rgba(255,255,255,.25); display:inline-block; }
+  .kitlogo { height:34px; max-width:120px; object-fit:contain; background:rgba(255,255,255,.9); border-radius:6px; padding:3px; }
   .switch-row input { width:26px; height:26px; accent-color:#B83B3B; flex:none; }
   .busy { display:flex; flex-direction:column; align-items:center; gap:16px; padding:60px 20px; text-align:center; color:var(--muted); }
   .busy.overlay { position:fixed; inset:0; z-index:40; background:rgba(5,12,24,.82); justify-content:center; color:var(--text); }
@@ -267,7 +281,7 @@ function header(title, sub, onBack) {
 let toastTimer;
 function toast(text, bad) {
   const t = document.getElementById("toast");
-  t.textContent = text; t.className = "toast show" + (bad ? " bad" : "");
+  t.textContent = text; t.className = "toast on" + (bad ? " bad" : "");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = "toast", 2600);
 }
 function failed(error) { if (error.message !== "signin") { toast(error.message, true); logError(error.message); MAKE.logToDrive(new Date().toISOString() + " " + error.message); } }
@@ -338,6 +352,7 @@ async function showClients() {
   testBar();
   main.append($(`<div><input class="search" id="find" placeholder="Find a client" hidden>
     <div class="clients" id="list">${'<div class="skel" style="height:78px"></div>'.repeat(4)}</div>
+    ${WEB ? `<div class="row2" style="margin-top:16px"><button class="btn ghost" id="newclient">${ICON2.plus}New Client</button><button class="btn ghost" id="pitch">${ICON2.spark}Pitch a Business</button></div>` : ""}
     ${WEB ? `<p style="margin-top:26px;text-align:center"><a class="muted" style="color:var(--sky)" href="#" id="change">Change the Drive folder</a>
              &nbsp;·&nbsp; <a class="muted" style="color:var(--sky)" href="#" id="signout">Sign out</a></p>
              ${navigator.standalone ? "" : `<p class="muted" style="margin-top:14px;text-align:center">Tip: tap Share, then <b>Add to Home Screen</b>, to keep Plan Builder on your iPad's home screen.</p>`}`
@@ -345,6 +360,8 @@ async function showClients() {
     : IN_APP ? `<p style="margin-top:26px;text-align:center"><a class="muted" style="color:var(--sky)" href="racplanbuilder://change">Connect to a different computer</a></p>`
              : `<p class="muted" style="margin-top:22px;text-align:center">Tip: tap Share, then <b>Add to Home Screen</b>, to keep Plan Builder on your home screen.</p>`}</div>`));
   if (WEB) {
+    document.getElementById("newclient").onclick = showNewClient;
+    document.getElementById("pitch").onclick = showPitch;
     document.getElementById("change").onclick = (e) => { e.preventDefault(); changeFolder(); };
     document.getElementById("signout").onclick = (e) => { e.preventDefault(); signOut(); };
   }
@@ -375,6 +392,8 @@ async function showPosts(client, keep) {
   testBar();
   const actions = $(`<div class="actions"><button class="btn" id="create">${ICON2.spark}Create Posts</button>
     <button class="btn ghost" id="addphotos">${ICON2.camera}Add Photos</button>
+    <button class="btn ghost" id="addvideos">${ICON2.video}Add Videos</button>
+    <button class="btn ghost" id="opus">${ICON2.clips}Opus Clips</button>
     <button class="btn ghost" id="decks">${ICON2.deck}Decks</button>
     <button class="btn ghost" id="show">${ICON2.present}Show to Client</button>
     <a class="btn ghost" id="drive" href="https://drive.google.com" target="_blank" rel="noopener">${ICON2.folder}Drive Folder</a></div>`);
@@ -382,6 +401,8 @@ async function showPosts(client, keep) {
   document.getElementById("create").onclick = () => showCreate(client);
   document.getElementById("addphotos").onclick = () => addPhotos(client);
   document.getElementById("decks").onclick = () => showDecks(client);
+  document.getElementById("addvideos").onclick = () => addVideos(client);
+  document.getElementById("opus").onclick = () => showOpus(client);
   document.getElementById("show").onclick = () => showToClient(client);
   main.append($(`<div><div class="chips" id="chips"></div>
     <div class="grid" id="grid">${'<div class="skel" style="aspect-ratio:4/5"></div>'.repeat(4)}</div>
