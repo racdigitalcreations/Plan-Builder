@@ -5,6 +5,12 @@ const FOLDER = "application/vnd.google-apps.folder";
 const FINAL_FOLDER = "Final Posts", OLDER_FOLDER = "Older versions", PROOFS_FOLDER = "Plan Builder Proofs";
 const PENDING = "Plan Builder Phone Approvals.json";   // the phone/iPad adds approvals here
 const PUBLISHED = "Plan Builder Approved.json";        // the computer's approved list
+const SETTINGS_FILE = "Plan Builder Settings.json";    // the computer's settings (Brand Kits...), Version 81 and newer
+const TEST_FOLDER = "Testing";                         // Test mode: everything goes in <client> / Testing
+// Never read as the client's photos: screenshots of other businesses, and the app's own output (like drive.py)
+const NOT_PHOTOS = ["Inspiration", FINAL_FOLDER, "Final Exports for Posting", OLDER_FOLDER, PROOFS_FOLDER, "Posts",
+                    "Carousels", "Archive", TEST_FOLDER];
+const VERSION = 2;                                     // the page checks this, so a new page never talks to an old helper
 const FIELDS = "id,name,mimeType,thumbnailLink,createdTime,modifiedTime";
 const API = "https://www.googleapis.com/drive/v3/files";
 const LIST_SECONDS = 120;                             // folder listings are remembered for 2 minutes
@@ -128,9 +134,19 @@ class Drive {
     return id;
   }
 
+  /** Where the app's work goes for a client: their folder, or its Testing folder in Test mode (null if none yet). */
+  async home(client, test) {
+    const id = await this.clientId(client);
+    if (!test) return id;
+    const folder = childFolder(await this.children(id, true), TEST_FOLDER);
+    return folder ? folder.id : null;
+  }
+
   /** The client's finished posts in Final Posts, grouped by post with each size (like phone.py). */
-  async posts(client) {
-    const fin = childFolder(await this.children(await this.clientId(client), true), FINAL_FOLDER);
+  async posts(client, test) {
+    const home = await this.home(client, test);
+    if (!home) return [];
+    const fin = childFolder(await this.children(home, true), FINAL_FOLDER);
     if (!fin) return [];
     const marks = await this.approvals();
     const posts = new Map();
@@ -147,6 +163,8 @@ class Drive {
       if (!(size in entry.sizes)) {
         entry.sizes[size] = {
           images: images.map(i => i.id),
+          folderId: found.id === (video && video.id) ? null : found.id,
+          plan: found.plan ? found.plan.id : null,
           caption: caption ? caption.id : null,
           video: video ? video.id : null,
           video_type: video ? (video.mimeType || "video/mp4") : "video/mp4",
@@ -195,19 +213,20 @@ class Drive {
     for (const folder of folders) {
       const files = listing.get(folder.id) || [];
       const images = [], swipes = [];
-      let caption = null;
+      let caption = null, plan = null;
       for (const f of files) {
         const kind = f.mimeType || "";
         if (kind.startsWith("image/")) images.push(f);
         else if (kind.startsWith("video/")) swipes.push(f);
         if (!caption && f.name.toLowerCase().endsWith("caption.txt")) caption = f;
+        if (!plan && f.name.toLowerCase().endsWith("slides.json")) plan = f;     // made on the iPad: can be remade
       }
       if (!images.length && !swipes.length) continue;
       images.sort((a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : a.name.toLowerCase() > b.name.toLowerCase() ? 1 : 0);
       const start = folder.name.toLowerCase() + " - swipe video";
       for (const v of videos) if (v.name.toLowerCase().startsWith(start)) swipes.push(v);
       nineBySixteenFirst(swipes);
-      sets.push({ id: folder.id, name: folder.name, path: path + folder.name, images, caption, video: swipes[0] || null });
+      sets.push({ id: folder.id, name: folder.name, path: path + folder.name, images, caption, plan, video: swipes[0] || null });
     }
     // Swipe videos made without JPGs ('Swipe video only') are posts of their own
     const have = new Set();
@@ -222,6 +241,46 @@ class Drive {
       }
     }
     return sets;
+  }
+
+  /** Every photo in the client's folders (not Inspiration or the app's own work), like media_in on the computer. */
+  async media(client) {
+    const photos = [];
+    let level = [{ id: await this.clientId(client), path: "" }];
+    for (let depth = 0; depth < 5 && level.length; depth++) {
+      const inside = await this.childrenOf(level.map(f => f.id), depth === 0);
+      const next = [];
+      for (const folder of level) {
+        for (const item of inside.get(folder.id) || []) {
+          const path = folder.path + item.name;
+          if (isFolder(item)) {
+            if (depth < 4 && !NOT_PHOTOS.includes(item.name)) next.push({ id: item.id, path: path + "/" });
+          } else if ((item.mimeType || "").startsWith("image/")) {
+            photos.push({ id: item.id, name: item.name, path, folder: folder.path.replace(/\/$/, "") || "(main folder)",
+                          type: item.mimeType, made: item.createdTime || "" });
+          }
+        }
+      }
+      level = next;
+    }
+    return photos;
+  }
+
+  /** The newest Strategy doc in the client's folder, as text ("" when there isn't one). */
+  async strategy(client) {
+    const docs = (await this.children(await this.clientId(client), false)).filter(i => i.name.includes(" - Strategy - "));
+    docs.sort((a, b) => (a.modifiedTime || "") < (b.modifiedTime || "") ? 1 : -1);
+    for (const doc of docs) {
+      try {
+        const url = doc.mimeType === "application/vnd.google-apps.document"
+          ? API + "/" + encodeURIComponent(doc.id) + "/export?mimeType=text/plain"
+          : API + "/" + encodeURIComponent(doc.id) + "?alt=media";
+        if (doc.mimeType && !doc.mimeType.startsWith("text/") && !doc.mimeType.includes("google-apps.document")) continue;
+        const text = (await (await this.call("GET", url)).text()).trim();
+        if (text) return text.slice(0, 6000);
+      } catch (e) { if (e instanceof SignInNeeded) throw e; }
+    }
+    return "";
   }
 
   async proofs(client) {
@@ -241,11 +300,11 @@ class Drive {
   }
 
   /** A file, passed straight through (so videos can skip ahead). small = Google's 600-pixel picture of it. */
-  async file(fileId, small, range) {
+  async file(fileId, small, range, big) {
     const item = await this.item(fileId);
-    if (small && item.thumbnailLink) {
+    if ((small || big) && item.thumbnailLink) {      // big: a 2000-pixel copy, plenty for 1080-wide slides
       try {
-        const r = await this.call("GET", item.thumbnailLink.replace(/=s\d+$/, "=s600"));
+        const r = await this.call("GET", item.thumbnailLink.replace(/=s\d+$/, big ? "=s2000" : "=s600"));
         return new Response(r.body, { headers: { "Content-Type": r.headers.get("Content-Type") || "image/jpeg",
                                                   "Cache-Control": "private, max-age=3600" } });
       } catch (e) { if (e instanceof SignInNeeded) throw e; }   // no picture from Google: use the file itself
@@ -344,11 +403,15 @@ async function answer(request, what, q) {
   try {
     const d = await getDrive();
     if (what === "clients") return reply({ clients: await d.clientList() });
-    if (what === "posts") return reply({ posts: await d.posts(q.get("client")) });
+    if (what === "version") return reply({ version: VERSION });
+    if (what === "posts") return reply({ posts: await d.posts(q.get("client"), q.get("test") === "1") });
+    if (what === "media") return reply({ photos: await d.media(q.get("client")) });
+    if (what === "strategy") return reply({ text: await d.strategy(q.get("client")) });
+    if (what === "settings") return reply({ settings: await d.jsonFile(SETTINGS_FILE) });
     if (what === "proofs") return reply({ proofs: await d.proofs(q.get("client")) });
-    if (what === "caption") return reply({ text: (await d.text(q.get("id"))).trim() });
+    if (what === "caption" || what === "text") return reply({ text: (await d.text(q.get("id"))).trim() });
     if (what === "approve") return reply({ approved: await d.approve(q.get("client"), q.get("post")) });
-    if (what === "file") return await d.file(q.get("id"), q.get("small") === "1", request.headers.get("Range"));
+    if (what === "file") return await d.file(q.get("id"), q.get("small") === "1", request.headers.get("Range"), q.get("big") === "1");
     return reply({ error: "Not found." }, 404);
   } catch (e) {
     if (e instanceof SignInNeeded) return reply({ error: e.message }, 401);

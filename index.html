@@ -13,6 +13,8 @@
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="logo.svg">
 <script src="config.js"></script>
+<script src="make.js"></script>
+<script src="screens.js"></script>
 <title>Plan Builder</title>
 <style>
   :root { --bg:#0A1628; --bg2:#0D1B30; --card:#12223A; --card2:#1A2F4D; --line:#2A4468; --text:#EAF2FA;
@@ -148,6 +150,54 @@
           animation:sh 1.2s infinite; border-radius:var(--r); }
   @keyframes sh { to { background-position:-200% 0; } }
   @media (min-width:700px) { .swipe > * { flex-basis:70%; } .grid { grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); } }
+
+  /* making and fixing posts */
+  header .hbtn svg { width:21px; height:21px; }
+  .testbar { background:#B83B3B; color:white; border-radius:12px; padding:10px 14px; font-size:14.5px; font-weight:650; margin-bottom:14px; text-align:center; }
+  .actions { display:flex; gap:10px; margin-bottom:16px; }
+  .actions .btn { padding:14px 10px; font-size:16px; }
+  .row2 { display:flex; gap:10px; margin-top:12px; }
+  .row2 .btn { padding:14px 10px; font-size:16px; }
+  .pick { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  .tile { position:relative; border:3px solid transparent; padding:0; border-radius:14px; overflow:hidden; background:var(--bg2); aspect-ratio:1; }
+  .tile img { width:100%; height:100%; object-fit:cover; display:block; }
+  .tile.on { border-color:var(--sky); }
+  .tile .n { position:absolute; top:6px; right:6px; min-width:28px; height:28px; border-radius:14px; display:grid; place-items:center;
+             font-weight:800; font-size:14px; background:rgba(5,12,24,.55); border:2px solid white; color:white; padding:0 6px; }
+  .tile:not(.on) .n:empty { background:rgba(5,12,24,.3); }
+  .tile.on .n { background:var(--sky); }
+  .text { width:100%; border-radius:14px; border:1px solid var(--line); background:var(--bg2); color:var(--text); font:inherit;
+          font-size:16px; padding:12px 14px; outline:none; resize:vertical; }
+  .text:focus { border-color:var(--sky); }
+  input.text { height:50px; }
+  .field { margin:12px 0; } .field label { display:block; font-size:14px; color:var(--muted); margin:0 0 6px 4px; }
+  .field .ok { color:#7fd6a0; font-weight:700; margin-left:6px; }
+  .switch-row { display:flex; align-items:center; justify-content:space-between; gap:14px; background:var(--card); border:1px solid rgba(42,68,104,.7);
+                border-radius:14px; padding:14px; font-size:16px; }
+  .switch-row input { width:26px; height:26px; accent-color:#B83B3B; flex:none; }
+  .busy { display:flex; flex-direction:column; align-items:center; gap:16px; padding:60px 20px; text-align:center; color:var(--muted); }
+  .busy.overlay { position:fixed; inset:0; z-index:40; background:rgba(5,12,24,.82); justify-content:center; color:var(--text); }
+  .spin { width:44px; height:44px; border-radius:50%; border:4px solid var(--line); border-top-color:var(--sky); animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .pcard { background:var(--card); border:1px solid rgba(42,68,104,.7); border-radius:var(--r); padding:14px; margin-bottom:22px; }
+  .pcard-head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .ptitle { flex:1; min-width:0; background:transparent; border:0; border-bottom:1px dashed var(--line); color:var(--text); font:inherit; font-size:20px; font-weight:700; padding:4px 0; outline:none; }
+  .pill2 { font-size:12px; font-weight:700; border-radius:999px; padding:4px 10px; background:rgba(232,130,30,.9); color:white; flex:none; }
+  .pill2.ok { background:rgba(52,178,106,.85); }
+  .sizes .seg { margin-bottom:12px; } .sizes .seg button { padding:9px 6px; font-size:14.5px; }
+  .sedit { background:var(--card); border:1px solid rgba(42,68,104,.7); border-radius:var(--r); padding:12px; margin-bottom:12px; }
+  .sedit-top { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .sedit-top select { flex:1; min-width:0; height:40px; border-radius:10px; background:var(--bg2); color:var(--text); border:1px solid var(--line); font:inherit; font-size:15px; padding:0 8px; }
+  .sedit-body { display:flex; gap:12px; }
+  .sphoto { width:110px; flex:none; aspect-ratio:4/5; border-radius:12px; border:1px dashed var(--line); background:var(--bg2); padding:0; overflow:hidden; color:var(--muted); font-size:13px; }
+  .sphoto img { width:100%; height:100%; object-fit:cover; display:block; }
+  .sfields { flex:1; min-width:0; display:flex; flex-direction:column; gap:8px; }
+  .sfields input.text { height:44px; }
+  .mini { border:0; background:var(--card2); border-radius:10px; padding:8px 12px; font-size:14px; font-weight:650; display:inline-flex; align-items:center; gap:6px; }
+  .mini svg { width:16px; height:16px; } .mini:disabled { opacity:.35; } .mini.bad { color:var(--red); }
+  .sheet { position:fixed; inset:0; z-index:35; background:rgba(5,12,24,.7); display:flex; align-items:flex-end; justify-content:center; }
+  .sheet-in { background:var(--bg); width:100%; max-width:960px; max-height:85vh; overflow:auto; border-radius:22px 22px 0 0; padding:16px 16px calc(env(safe-area-inset-bottom) + 16px); }
+  .sheet-head { display:flex; align-items:center; gap:8px; margin-bottom:12px; } .sheet-head b { flex:1; font-size:18px; }
 </style>
 </head>
 <body>
@@ -196,7 +246,7 @@ function toast(text, bad) {
   t.textContent = text; t.className = "toast show" + (bad ? " bad" : "");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = "toast", 2600);
 }
-function failed(error) { if (error.message !== "signin") { toast(error.message, true); logError(error.message); } }
+function failed(error) { if (error.message !== "signin") { toast(error.message, true); logError(error.message); MAKE.logToDrive(new Date().toISOString() + " " + error.message); } }
 const file = (id, small) => "api/file?id=" + encodeURIComponent(id) + (small ? "&small=1" : "");
 const initials = (name) => name.split(/\s+/).filter(w => /[A-Za-z0-9]/.test(w[0] || "")).slice(0, 2).map(w => w[0].toUpperCase()).join("") || "?";
 const colorFor = (name) => AVATARS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATARS.length];
@@ -231,7 +281,7 @@ function showCode(message, noQuiet) {
     <img src="logo.svg" alt="R.A.C. digital creations" style="width:110px">
     <h1>Plan Builder</h1>
     <p>${CLIENT_ID ? "Sign in with the Google account that has your client folders." :
-        "Almost ready: put your Google Client ID in config.js (see the setup steps, Part 2)."}</p>
+        "Almost ready: put your Google Client ID in config.js (see the setup steps, Part 3)."}</p>
     <div class="folder"><label for="root">Main Drive folder</label><input id="root" autocapitalize="words" autocomplete="off"></div>
     <button class="btn" id="go" style="width:min(330px,100%);margin:0 auto" ${CLIENT_ID ? "" : "disabled"}>Sign in with Google</button>
     ${message ? `<p class="muted" style="color:var(--red);margin-top:18px">${esc(message)}</p>` : ""}
@@ -259,7 +309,9 @@ function logError(text) {                                  // the last 50 proble
 
 // ---------- clients ----------
 async function showClients() {
-  header("Clients", "R.A.C. Plan Builder");
+  header("Clients", "R.A.C. Plan Builder" + (MAKE.testMode() ? " · Test mode" : ""));
+  headerButton(ICON2.gear, "Settings", showSettings);
+  testBar();
   main.append($(`<div><input class="search" id="find" placeholder="Find a client" hidden>
     <div class="clients" id="list">${'<div class="skel" style="height:78px"></div>'.repeat(4)}</div>
     ${WEB ? `<p style="margin-top:26px;text-align:center"><a class="muted" style="color:var(--sky)" href="#" id="change">Change the Drive folder</a>
@@ -295,23 +347,31 @@ async function showClients() {
 // ---------- one client's posts ----------
 async function showPosts(client, keep) {
   state.client = client;
-  header(client, "Finished posts", showClients);
+  header(client, MAKE.testMode() ? "Test posts (their Testing folder)" : "Finished posts", showClients);
+  testBar();
+  const actions = $(`<div class="actions"><button class="btn" id="create">${ICON2.spark}Create Posts</button>
+    <button class="btn ghost" id="addphotos">${ICON2.camera}Add Photos</button></div>`);
+  main.append(actions);
+  document.getElementById("create").onclick = () => showCreate(client);
+  document.getElementById("addphotos").onclick = () => addPhotos(client);
   main.append($(`<div><div class="chips" id="chips"></div>
     <div class="grid" id="grid">${'<div class="skel" style="aspect-ratio:4/5"></div>'.repeat(4)}</div>
     <h2>Proofs for approval</h2><div id="proofs"><div class="skel" style="height:62px"></div></div></div>`));
   try {
-    if (!keep) state.posts = (await api("api/posts?client=" + encodeURIComponent(client))).posts;
+    if (!keep) state.posts = (await api("api/posts?client=" + encodeURIComponent(client) + (MAKE.testMode() ? "&test=1" : ""))).posts;
     drawPosts();
-  } catch (e) { failed(e); document.getElementById("grid").innerHTML = ""; }
+  } catch (e) { failed(e); const grid = document.getElementById("grid"); if (grid) grid.innerHTML = ""; }
   try {
     const { proofs } = await api("api/proofs?client=" + encodeURIComponent(client));
     const box = document.getElementById("proofs");
+    if (!box) return;
     box.innerHTML = proofs.length ? "" : '<p class="muted">No proofs yet. Make Proof on 4 Review puts them here.</p>';
     proofs.forEach(p => box.append($(`<a class="proof" href="https://drive.google.com/file/d/${encodeURIComponent(p.id)}/view" target="_blank" rel="noopener"><div class="ic">PDF</div><span>${esc(p.name)}</span></a>`)));
-  } catch (e) { document.getElementById("proofs").innerHTML = ""; }
+  } catch (e) { const box = document.getElementById("proofs"); if (box) box.innerHTML = ""; }
 }
 function drawPosts() {
   const posts = state.posts, grid = document.getElementById("grid"), chips = document.getElementById("chips");
+  if (!grid || !chips) return;
   const waiting = posts.filter(p => !p.approved).length;
   chips.innerHTML = "";
   [["all", "All", posts.length], ["wait", "Waiting", waiting], ["ok", "Approved", posts.length - waiting]].forEach(([key, label, n]) => {
@@ -321,7 +381,7 @@ function drawPosts() {
   });
   grid.innerHTML = "";
   const shown = posts.filter(p => state.filter === "all" || (state.filter === "ok") === !!p.approved);
-  if (!posts.length) grid.replaceWith(Object.assign($(`<div class="empty-state" id="grid"><div class="big">🗂️</div>No finished posts yet.<br>Export posts on the computer (5 Export) and they show up here.</div>`)));
+  if (!posts.length) grid.replaceWith(Object.assign($(`<div class="empty-state" id="grid"><div class="big">🗂️</div>No ${MAKE.testMode() ? "test " : "finished "}posts yet.<br>Tap Create Posts, or export posts on the computer (5 Export).</div>`)));
   else if (!shown.length) grid.append($(`<div class="muted">Nothing here.</div>`));
   shown.forEach(post => {
     const set = post.sizes["4:5"] || post.sizes["9:16"] || {};
@@ -386,9 +446,11 @@ function showPost(index) {
   else caption.textContent = "No caption saved for this post.";
 
   const bar = $(`<div class="bar"><div class="bar-inner">
+    <button class="btn ghost" id="fix">${ICON2.pencil}Fix</button>
     <button class="btn ghost" id="copy">${ICON.copy}Copy Caption</button>
     <button class="btn ${post.approved ? "done" : "green"}" id="approve">${ICON.check}${post.approved ? "Approved" : "Approve"}</button></div></div>`);
   document.body.append(bar);
+  document.getElementById("fix").onclick = () => showFix(index);
   document.getElementById("copy").onclick = async () => {
     if (!text) return toast("This post has no caption.", true);
     try { await navigator.clipboard.writeText(text); }
@@ -409,7 +471,15 @@ function showPost(index) {
 }
 
 async function start() {
-  if (!("serviceWorker" in navigator)) { main.innerHTML = '<p class="muted" style="padding:40px;text-align:center">Please open this page in Safari or Chrome.</p>'; return; }
+  if (!("serviceWorker" in navigator)) {
+    const plain = location.protocol === "http:" && !/^(localhost|127\.)/.test(location.hostname);
+    main.innerHTML = '<div class="hero"><img src="logo.svg" alt="" style="width:90px"><h1>Plan Builder</h1><p>' + (plain
+      ? 'This needs the secure address. Open <b>https://' + esc(location.host + location.pathname) + '</b> instead. (If that doesn\'t open yet, GitHub is still setting it up: check Settings &gt; Pages and tick Enforce HTTPS.)'
+      : /CriOS|FxiOS|EdgiOS/.test(navigator.userAgent)
+        ? 'On iPad and iPhone, please open this page in <b>Safari</b>. Then tap Share &gt; Add to Home Screen.'
+        : 'This browser can\'t run Plan Builder. Please open it in Safari (iPad / iPhone) or Chrome.') + '</p></div>';
+    return;
+  }
   try {
     await navigator.serviceWorker.register("sw.js");
     await navigator.serviceWorker.ready;
@@ -418,6 +488,16 @@ async function start() {
       if (!navigator.serviceWorker.controller) return location.reload();
     }
   } catch (e) { logError("helper: " + e.message); main.innerHTML = '<p class="muted" style="padding:40px;text-align:center">Couldn\'t start Plan Builder: ' + esc(e.message) + '</p>'; return; }
+  // A new page with an old helper (sw.js) still running: get the new helper first
+  try {
+    const v = await fetch("api/version").then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    if (v.version !== 2 && !sessionStorage.getItem("pb_updated")) {
+      sessionStorage.setItem("pb_updated", "1");
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) { await reg.update(); await new Promise(r => setTimeout(r, 1500)); }
+      return location.reload();
+    }
+  } catch (e) { logError("update: " + e.message); }
   await share("root", rootName());
   const answer = new URLSearchParams(location.hash.slice(1));
   if (answer.has("access_token") || answer.has("error")) history.replaceState(null, "", location.pathname + location.search);
