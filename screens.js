@@ -7,6 +7,10 @@ const ICON2 = {
   spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
   pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  deck: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>',
+  present: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
 };
 const LAYOUT_NAMES = { hook: "Hook (big photo)", statement: "Statement (dark)", split: "Photo beside words", tip: "Tip (photo on top)",
@@ -419,4 +423,175 @@ function parseCaption(text) {
   return { tagline: grab(/Tagline:\s*(.*)/i), caption: grab(/Caption:\s*\n([\s\S]*?)\n\s*Hashtags:/i) || "",
            hashtags: grab(/Hashtags:\s*(.*)/i), alt: (grab(/Alt text:\s*\n([\s\S]*?)(\n\s*\n|\nPOSTING TIPS|$)/i)).split("\n").map(s => s.trim()).filter(Boolean),
            tips: grab(/POSTING TIPS[^\n]*\n([\s\S]*)$/i) };
+}
+
+// ---------- the client screen's Drive Folder button and "About this client" ----------
+const driveFolder = (id) => "https://drive.google.com/drive/folders/" + encodeURIComponent(id);
+async function clientInfo(client) {
+  const link = document.getElementById("drive"), about = document.getElementById("about");
+  try {
+    const f = await api("api/folders?client=" + encodeURIComponent(client));
+    const id = MAKE.testMode() && f.testing ? f.testing : f.id;
+    if (link) link.href = driveFolder(id);
+    const s = await MAKE.settings(), boxes = (s.client_info || {})[client] || {}, kit = MAKE.brandKit(client);
+    const about2 = ((s.inspiration || {})[client] || {}).about;
+    const site = (boxes.website || "").trim(), href = site && !/^https?:/i.test(site) ? "https://" + site : site;
+    const rows = [];
+    if (about2) rows.push(`<div><b>What they do</b>${esc(about2)}</div>`);
+    if (site) rows.push(`<div><b>Website</b><a class="link" href="${esc(href)}" target="_blank" rel="noopener">${esc(site)}</a></div>`);
+    if (kit.contact) rows.push(`<div><b>Contact line</b>${esc(kit.contact)}</div>`);
+    if (boxes.notes) rows.push(`<div><b>Notes</b>${esc(boxes.notes)}</div>`);
+    if (f.strategy) rows.push(`<div><b>Strategy</b><a class="link" href="https://docs.google.com/document/d/${encodeURIComponent(f.strategy.id)}/edit" target="_blank" rel="noopener">${esc(f.strategy.name)}</a></div>`);
+    rows.push(`<div><b>Drive</b><a class="link" href="${driveFolder(f.id)}" target="_blank" rel="noopener">Open ${esc(client)}'s folder</a>${f.testing ? ` · <a class="link" href="${driveFolder(f.testing)}" target="_blank" rel="noopener">Testing folder</a>` : ""}</div>`);
+    if (about) about.innerHTML = `<div class="info">${rows.join("")}</div>
+      <h2>Notes</h2><div class="info" id="notes"><span class="muted">Loading...</span></div>
+      <div class="row2"><button class="btn ghost" id="addnote">${ICON2.pencil}Add a Note</button></div>`;
+    const addBtn = document.getElementById("addnote");
+    if (addBtn) addBtn.onclick = () => addNoteBox(client);
+    drawNotes(client);
+  } catch (e) { if (about) about.innerHTML = ""; if (e.message === "signin") return; logError("client info: " + e.message); }
+}
+
+// ---------- Decks: the PowerPoint decks Create Posts made on the computer ----------
+async function showDecks(client) {
+  header("Decks", client + " · PowerPoint", () => showPosts(client));
+  testBar();
+  main.append($(`<div>
+    <p class="msg">Tap <b>Open</b> to open a deck in the Drive app. To change it in PowerPoint, open PowerPoint on the iPad and go to
+    Open &gt; Browse &gt; Google Drive, so your changes save back to the same deck. (Drive's own "Open in" menu makes a copy instead.)
+    Then tap <b>Make JPGs</b> to put fresh posting JPGs in Final Posts.</p>
+    <div id="decklist">${'<div class="skel" style="height:66px;margin-bottom:8px"></div>'.repeat(4)}</div></div>`));
+  const list = document.getElementById("decklist");
+  try {
+    const { decks } = await api("api/decks?client=" + encodeURIComponent(client) + (MAKE.testMode() ? "&test=1" : ""));
+    if (!list) return;
+    list.innerHTML = "";
+    if (!decks.length) {
+      list.append($(`<div class="empty-state"><div class="big">🖥️</div>No PowerPoint decks for ${esc(client)}${MAKE.testMode() ? " in Testing" : ""} yet.<br>Create Posts on the computer makes them.</div>`));
+      return;
+    }
+    let run = null;
+    decks.forEach(deck => {
+      if (deck.run !== run) { run = deck.run; list.append($(`<h2>${esc(run)}</h2>`)); }
+      const row = $(`<div class="deck"><div class="ic">PPT</div><div class="nm"><div></div><div></div></div>
+        <a class="mini" target="_blank" rel="noopener">Open</a><button class="mini" data-jpgs>Make JPGs</button></div>`);
+      row.querySelector(".nm div").textContent = deck.name.replace(/\.pptx$/i, "");
+      row.querySelector(".nm div + div").textContent = (deck.size === "9:16" ? "Facebook · TikTok 9:16" : "Instagram 4:5")
+        + (deck.modified ? " · changed " + new Date(deck.modified).toLocaleDateString() : "");
+      row.querySelector("a").href = "https://drive.google.com/file/d/" + encodeURIComponent(deck.id) + "/view";
+      row.querySelector("[data-jpgs]").onclick = () => deckJpgs(client, deck);
+      list.append(row);
+    });
+  } catch (e) { fail(e, "Decks"); if (list) list.innerHTML = ""; }
+}
+async function deckJpgs(client, deck) {
+  if (!confirm(`Make fresh posting JPGs from "${deck.post}"? They replace this post's JPGs in Final Posts (its caption stays).`)) return;
+  const { box, say } = busyBox("Starting...");
+  box.className = "busy overlay"; document.body.append(box);
+  try {
+    const made = await MAKE.deckToFinal(client, deck, MAKE.testMode(), say);
+    box.remove();
+    toast(`${made.count} JPGs saved in Final Posts (${made.sizeKey})`);
+  } catch (e) { box.remove(); fail(e, "Make JPGs from a deck"); }
+}
+
+// ---------- quick notes about a client (their "iPad Notes" doc in Drive; Create Posts reads them too) ----------
+async function drawNotes(client, text) {
+  const box = document.getElementById("notes");
+  if (!box) return;
+  try {
+    if (text === undefined) text = await MAKE.notes(client);
+    text = String(text || "").replace(new RegExp("^\\s*" + client.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " - iPad Notes\\s*", "i"), "").trim();
+    const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    box.innerHTML = lines.length ? lines.slice(0, 8).map(l => `<div>${esc(l)}</div>`).join("") +
+      (lines.length > 8 ? `<div class="muted">and ${lines.length - 8} older...</div>` : "")
+      : `<span class="muted">No notes yet. Notes you add here go in their "iPad Notes" doc in Drive, and Create Posts reads them.</span>`;
+    const link = await MAKE.docLink(client);
+    if (link && document.getElementById("notes")) box.append($(`<div><a class="link" href="${esc(link)}" target="_blank" rel="noopener">Open the notes doc</a></div>`));
+  } catch (e) { if (e.message !== "signin") box.innerHTML = `<span class="muted">Couldn't read the notes right now.</span>`; }
+}
+function addNoteBox(client) {
+  const sheet = $(`<div class="sheet"><div class="sheet-in"><div class="sheet-head"><b>Note about ${esc(client)}</b><button class="mini" data-close>Cancel</button></div>
+    <textarea class="text" rows="5" placeholder="For example: wants more team photos, closed Mondays, new phone number..."></textarea>
+    <div class="row2"><button class="btn green" data-save>${ICON2.save}Save Note</button></div></div></div>`);
+  document.body.append(sheet);
+  const box = sheet.querySelector("textarea"); box.focus();
+  sheet.querySelector("[data-close]").onclick = () => sheet.remove();
+  sheet.querySelector("[data-save]").onclick = async () => {
+    if (!box.value.trim()) return toast("Type the note first.", true);
+    const btn = sheet.querySelector("[data-save]"); btn.disabled = true; btn.textContent = "Saving...";
+    try { const all = await MAKE.addNote(client, box.value); sheet.remove(); toast("Note saved"); drawNotes(client, all); }
+    catch (e) { btn.disabled = false; btn.innerHTML = ICON2.save + "Save Note"; fail(e, "Saving a note"); }
+  };
+}
+
+// ---------- Show to Client: their waiting posts, full screen, one at a time ----------
+async function showToClient(client) {
+  const waiting = (state.posts || []).filter(p => !p.approved);
+  if (!waiting.length) return toast("Nothing is waiting for their OK.");
+  const view = $(`<div class="show"><div class="show-top"><div class="who"></div><div class="count"></div>
+    <button class="mini" data-finish>Finish</button></div><div class="show-mid"></div><div class="show-bottom"></div></div>`);
+  view.querySelector(".who").textContent = client;
+  document.body.append(view);
+  const mid = view.querySelector(".show-mid"), bottom = view.querySelector(".show-bottom"), count = view.querySelector(".count");
+  let at = 0, approved = 0, changes = 0;
+  const finish = () => { view.remove(); showPosts(client, true); };
+  view.querySelector("[data-finish]").onclick = () => { if (at >= waiting.length || confirm("Finish showing the posts?")) finish(); };
+  const done = () => {
+    count.textContent = "";
+    mid.innerHTML = `<div class="show-done"><div class="big">🎉</div><h1>All done. Thank you!</h1>
+      <p class="muted">${approved} approved${changes ? `, ${changes} with changes to make` : ""}.</p></div>`;
+    bottom.innerHTML = ""; const b = $(`<button class="btn">Finish</button>`); b.onclick = finish; bottom.append(b);
+  };
+  const show = () => {
+    if (at >= waiting.length) return done();
+    const post = waiting[at], set = post.sizes["4:5"] || post.sizes["9:16"];
+    count.textContent = `${at + 1} of ${waiting.length}`;
+    mid.innerHTML = `<h1 style="font-size:22px;margin:4px 0 12px">${esc(post.name)}</h1><div class="swipe"></div>
+      <p class="hint">Swipe to see every slide.</p><div class="caption empty">Loading the caption...</div>`;
+    const swipe = mid.querySelector(".swipe");
+    if (set.video) swipe.append($(`<video src="${file(set.video)}" controls playsinline preload="metadata"></video>`));
+    set.images.forEach(id => swipe.append($(`<img src="${file(id)}" alt="">`)));
+    const cap = mid.querySelector(".caption");
+    if (set.caption) api("api/caption?id=" + encodeURIComponent(set.caption)).then(d => {
+      // just what gets posted: tagline, caption and hashtags (not the alt text or posting tips)
+      const text = String(d.text || "").split(/\n\s*(Alt text:|POSTING TIPS)/i)[0].split("\n").slice(1).join("\n")
+        .replace(/^\s*Tagline:\s*/im, "").replace(/^\s*Caption:\s*$/im, "").replace(/^\s*Hashtags:\s*/im, "").replace(/\n{3,}/g, "\n\n").trim();
+      cap.textContent = text || "No caption yet."; cap.classList.toggle("empty", !text);
+    }).catch(() => { cap.textContent = ""; });
+    else cap.textContent = "No caption yet.";
+    bottom.innerHTML = "";
+    const no = $(`<button class="btn ghost">${ICON2.pencil}Needs Changes</button>`), yes = $(`<button class="btn green">${ICON.check}Looks Good</button>`);
+    bottom.append(no, yes);
+    yes.onclick = async () => {
+      yes.disabled = no.disabled = true;
+      try {
+        const r = await api("api/approve?client=" + encodeURIComponent(client) + "&post=" + encodeURIComponent(post.post), { client, post: post.post });
+        post.approved = r.approved; approved++;
+        if ((state.feedback || {})[MAKE.changeKey(client, post.post)]) {
+          delete state.feedback[MAKE.changeKey(client, post.post)];
+          MAKE.clearChanges(client, post.post).catch(e => logError("clear changes: " + e.message));
+        }
+        at++; show();
+      } catch (e) { yes.disabled = no.disabled = false; fail(e, "Show to Client"); }
+    };
+    no.onclick = () => {
+      bottom.innerHTML = "";
+      const note = $(`<textarea class="text" rows="3" placeholder="What would you like changed?"></textarea>`);
+      const back = $(`<button class="btn ghost">Back</button>`), send = $(`<button class="btn">Send</button>`);
+      const wrap = $(`<div style="flex:1;display:flex;flex-direction:column;gap:10px"></div>`), row = $(`<div class="row2" style="margin:0"></div>`);
+      row.append(back, send); wrap.append(note, row); bottom.append(wrap); note.focus();
+      back.onclick = show;
+      send.onclick = async () => {
+        send.disabled = true; send.textContent = "Saving...";
+        try {
+          await MAKE.askChanges(client, post.post, post.name, note.value);
+          state.feedback = state.feedback || {};
+          state.feedback[MAKE.changeKey(client, post.post)] = { day: new Date().toISOString().slice(0, 10), post: post.name, note: note.value.trim() };
+          changes++; at++; show();
+        } catch (e) { send.disabled = false; send.textContent = "Send"; fail(e, "Show to Client"); }
+      };
+    };
+  };
+  show();
 }

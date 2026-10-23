@@ -100,6 +100,21 @@
           backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
   .pill.ok { background:rgba(52,178,106,.85); color:white; }
   .pill.wait { background:rgba(232,130,30,.9); color:white; }
+  .pill.bad { background:rgba(200,64,64,.92); color:white; }
+  .qa { position:absolute; right:10px; width:40px; height:40px; border-radius:50%; display:grid; place-items:center;
+        background:rgba(42,157,92,.95); color:white; box-shadow:0 4px 12px rgba(0,0,0,.35); }
+  .post .qa { bottom:84px; }
+  .qa svg { width:20px; height:20px; }
+  .show { position:fixed; inset:0; z-index:50; background:#060D19; display:flex; flex-direction:column;
+          padding:calc(env(safe-area-inset-top) + 12px) 18px calc(env(safe-area-inset-bottom) + 14px); }
+  .show-top { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  .show-top .who { flex:1; font-weight:700; font-size:18px; } .show-top .count { color:var(--muted); font-size:15px; }
+  .show-mid { flex:1; min-height:0; overflow:auto; max-width:900px; width:100%; margin:0 auto; }
+  .show .swipe > * { max-height:58vh; }
+  .show .caption { margin-top:12px; font-size:16.5px; }
+  .show-bottom { display:flex; gap:12px; max-width:900px; width:100%; margin:12px auto 0; }
+  .show-bottom .btn { padding:18px 10px; font-size:18px; }
+  .show-done { text-align:center; margin:auto; } .show-done .big { font-size:64px; } .show-done h1 { margin:12px 0 6px; }
   .play { position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:50%; background:rgba(5,12,24,.6);
           display:grid; place-items:center; }
   .play svg { width:13px; height:13px; margin-left:2px; }
@@ -135,6 +150,15 @@
          background:rgba(10,22,40,.9); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
          border-top:1px solid rgba(42,68,104,.6); display:flex; gap:10px; }
   .bar .btn { padding:15px 10px; font-size:16px; }
+  @media (max-width:620px) { .bar .btn { font-size:14px; padding:13px 6px; gap:5px; } .bar .btn svg { width:17px; height:17px; } }
+  .link { color:var(--sky); font-size:15px; }
+  .info { background:var(--card); border:1px solid rgba(42,68,104,.7); border-radius:14px; padding:14px; font-size:15.5px; }
+  .info div + div { margin-top:8px; } .info b { color:var(--muted); font-weight:600; margin-right:6px; }
+  .deck { display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid rgba(42,68,104,.7); border-radius:14px; padding:12px 14px; margin-bottom:8px; }
+  .deck .ic { width:40px; height:40px; border-radius:10px; background:rgba(232,130,30,.16); color:#F2A65A; display:grid; place-items:center; font-size:11px; font-weight:800; flex:none; }
+  .deck .nm { flex:1; min-width:0; } .deck .nm div:first-child { font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .deck .nm div + div { font-size:13px; color:var(--muted); }
+  .deck .mini { flex:none; text-decoration:none; color:var(--text); }
   .bar-inner { display:flex; gap:10px; width:100%; max-width:960px; margin:0 auto; }
 
   .toast { position:fixed; left:50%; bottom:calc(env(safe-area-inset-bottom) + 96px); transform:translate(-50%,20px);
@@ -154,7 +178,7 @@
   /* making and fixing posts */
   header .hbtn svg { width:21px; height:21px; }
   .testbar { background:#B83B3B; color:white; border-radius:12px; padding:10px 14px; font-size:14.5px; font-weight:650; margin-bottom:14px; text-align:center; }
-  .actions { display:flex; gap:10px; margin-bottom:16px; }
+  .actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:16px; }
   .actions .btn { padding:14px 10px; font-size:16px; }
   .row2 { display:flex; gap:10px; margin-top:12px; }
   .row2 .btn { padding:14px 10px; font-size:16px; }
@@ -350,15 +374,26 @@ async function showPosts(client, keep) {
   header(client, MAKE.testMode() ? "Test posts (their Testing folder)" : "Finished posts", showClients);
   testBar();
   const actions = $(`<div class="actions"><button class="btn" id="create">${ICON2.spark}Create Posts</button>
-    <button class="btn ghost" id="addphotos">${ICON2.camera}Add Photos</button></div>`);
+    <button class="btn ghost" id="addphotos">${ICON2.camera}Add Photos</button>
+    <button class="btn ghost" id="decks">${ICON2.deck}Decks</button>
+    <button class="btn ghost" id="show">${ICON2.present}Show to Client</button>
+    <a class="btn ghost" id="drive" href="https://drive.google.com" target="_blank" rel="noopener">${ICON2.folder}Drive Folder</a></div>`);
   main.append(actions);
   document.getElementById("create").onclick = () => showCreate(client);
   document.getElementById("addphotos").onclick = () => addPhotos(client);
+  document.getElementById("decks").onclick = () => showDecks(client);
+  document.getElementById("show").onclick = () => showToClient(client);
   main.append($(`<div><div class="chips" id="chips"></div>
     <div class="grid" id="grid">${'<div class="skel" style="aspect-ratio:4/5"></div>'.repeat(4)}</div>
-    <h2>Proofs for approval</h2><div id="proofs"><div class="skel" style="height:62px"></div></div></div>`));
+    <h2>Proofs for approval</h2><div id="proofs"><div class="skel" style="height:62px"></div></div>
+    <h2>About this client</h2><div id="about"></div></div>`));
+  clientInfo(client);
   try {
-    if (!keep) state.posts = (await api("api/posts?client=" + encodeURIComponent(client) + (MAKE.testMode() ? "&test=1" : ""))).posts;
+    if (!keep) {
+      const [found, asked] = await Promise.all([api("api/posts?client=" + encodeURIComponent(client) + (MAKE.testMode() ? "&test=1" : "")),
+                                                MAKE.feedback().catch(e => { if (e.message === "signin") throw e; return {}; })]);
+      state.posts = found.posts; state.feedback = asked;
+    }
     drawPosts();
   } catch (e) { failed(e); const grid = document.getElementById("grid"); if (grid) grid.innerHTML = ""; }
   try {
@@ -369,6 +404,19 @@ async function showPosts(client, keep) {
     proofs.forEach(p => box.append($(`<a class="proof" href="https://drive.google.com/file/d/${encodeURIComponent(p.id)}/view" target="_blank" rel="noopener"><div class="ic">PDF</div><span>${esc(p.name)}</span></a>`)));
   } catch (e) { const box = document.getElementById("proofs"); if (box) box.innerHTML = ""; }
 }
+async function quickApprove(post) {
+  if (!confirm(`Mark "${post.name}" approved (both sizes)?`)) return;
+  try {
+    const r = await api("api/approve?client=" + encodeURIComponent(state.client) + "&post=" + encodeURIComponent(post.post), { client: state.client, post: post.post });
+    post.approved = r.approved;
+    if ((state.feedback || {})[MAKE.changeKey(state.client, post.post)]) {
+      delete state.feedback[MAKE.changeKey(state.client, post.post)];
+      MAKE.clearChanges(state.client, post.post).catch(e => logError("clear changes: " + e.message));
+    }
+    drawPosts(); toast("Marked approved");
+  } catch (e) { failed(e); }
+}
+const set0 = (post) => post.sizes["4:5"] || post.sizes["9:16"] || {};
 function drawPosts() {
   const posts = state.posts, grid = document.getElementById("grid"), chips = document.getElementById("chips");
   if (!grid || !chips) return;
@@ -386,13 +434,18 @@ function drawPosts() {
   shown.forEach(post => {
     const set = post.sizes["4:5"] || post.sizes["9:16"] || {};
     const slides = (set.images || []).length, video = Object.values(post.sizes).some(s => s.video);
+    const changes = (state.feedback || {})[MAKE.changeKey(state.client, post.post)];
     const card = $(`<button class="post"><div class="img"></div>
-      <span class="pill ${post.approved ? "ok" : "wait"}">${post.approved ? "✓ Approved" : "Waiting"}</span>
+      <span class="pill ${post.approved ? "ok" : changes ? "bad" : "wait"}">${post.approved ? "✓ Approved" : changes ? "Changes asked" : "Waiting"}</span>
+      ${post.approved ? "" : `<span class="qa" role="button" aria-label="Approve">${ICON.check}</span>`}
       ${video ? `<span class="play">${ICON.play}</span>` : ""}
       <div class="info"><div class="t">${esc(post.name)}</div>
       <div class="meta">${slides ? slides + (slides === 1 ? " slide" : " slides") : "Video"}${Object.keys(post.sizes).length > 1 ? " · both sizes" : ""}</div></div></button>`);
     if (post.cover) card.querySelector(".img").style.backgroundImage = `url('${file(post.cover, true)}')`;
-    card.onclick = () => showPost(posts.indexOf(post));
+    card.onclick = (e) => {
+      if (e.target.closest(".qa")) return quickApprove(post);
+      showPost(posts.indexOf(post));
+    };
     grid.append(card);
   });
 }
@@ -408,9 +461,10 @@ function showPost(index) {
     <div class="seg" id="seg"></div>
     <div class="viewer"><div class="swipe" id="swipe"></div><div class="counter" id="counter"></div></div>
     <div class="dots" id="dots"></div>
-    <p class="hint">Swipe for more slides. Press and hold a slide to save it to Photos.</p>
+    <p class="hint">Swipe for more slides. Share saves them to Photos or sends them to Instagram, Facebook or Messages.</p>
     <h2>Caption</h2><div class="caption empty" id="caption">Loading caption...</div>
-    <div class="status" id="status"></div></div>`));
+    <div class="status" id="status"></div>
+    ${set0(post).folderId ? `<p style="margin-top:16px"><a class="link" href="https://drive.google.com/drive/folders/${encodeURIComponent(set0(post).folderId)}" target="_blank" rel="noopener">Open this post's folder in Drive</a></p>` : ""}</div>`));
   const seg = document.getElementById("seg");
   sizes.forEach(size => {
     const b = $(`<button class="${size === state.size ? "on" : ""}">${label[size] || size}</button>`);
@@ -433,8 +487,10 @@ function showPost(index) {
 
   const status = () => {
     const box = document.getElementById("status");
+    const changes = (state.feedback || {})[MAKE.changeKey(state.client, post.post)];
     box.innerHTML = post.approved
       ? `<span class="dot" style="background:var(--green)"></span>Client approved this post (both sizes).`
+      : changes ? `<span class="dot" style="background:var(--red)"></span><span>The client asked for changes (${esc(changes.day)}): <b>${esc(changes.note || "no details")}</b></span>`
       : `<span class="dot" style="background:var(--orange)"></span>Waiting for the client's OK.`;
   };
   status();
@@ -447,10 +503,21 @@ function showPost(index) {
 
   const bar = $(`<div class="bar"><div class="bar-inner">
     <button class="btn ghost" id="fix">${ICON2.pencil}Fix</button>
+    <button class="btn ghost" id="share">${ICON2.share}Share</button>
     <button class="btn ghost" id="copy">${ICON.copy}Copy Caption</button>
     <button class="btn ${post.approved ? "done" : "green"}" id="approve">${ICON.check}${post.approved ? "Approved" : "Approve"}</button></div></div>`);
   document.body.append(bar);
   document.getElementById("fix").onclick = () => showFix(index);
+  // the slides are fetched now, so Share can open the share sheet the moment it's tapped (Safari needs that)
+  let files = null, sizeNow = state.size;
+  if (set.images.length) MAKE.slideFiles(post, sizeNow).then(f => { if (state.size === sizeNow) files = f; }).catch(e => logError("share: " + e.message));
+  document.getElementById("share").onclick = async () => {
+    if (!set.images.length) return toast("This post has no slides to share.", true);
+    if (!files) return toast("Still getting the slides. Try again in a moment.");
+    if (!navigator.canShare || !navigator.canShare({ files })) return toast("This browser can't share pictures. Press and hold a slide instead.", true);
+    try { await navigator.share({ files }); }
+    catch (e) { if (e.name !== "AbortError") failed(e); }
+  };
   document.getElementById("copy").onclick = async () => {
     if (!text) return toast("This post has no caption.", true);
     try { await navigator.clipboard.writeText(text); }
@@ -463,7 +530,12 @@ function showPost(index) {
     try {
       const r = await api("api/approve?client=" + encodeURIComponent(state.client) + "&post=" + encodeURIComponent(post.post),
                           { client: state.client, post: post.post });
-      post.approved = r.approved; status();
+      post.approved = r.approved;
+      if ((state.feedback || {})[MAKE.changeKey(state.client, post.post)]) {
+        delete state.feedback[MAKE.changeKey(state.client, post.post)];
+        MAKE.clearChanges(state.client, post.post).catch(e => logError("clear changes: " + e.message));
+      }
+      status();
       const b = document.getElementById("approve"); b.className = "btn done"; b.innerHTML = ICON.check + "Approved";
       toast("Marked approved");
     } catch (e) { failed(e); }
@@ -491,8 +563,8 @@ async function start() {
   // A new page with an old helper (sw.js) still running: get the new helper first
   try {
     const v = await fetch("api/version").then(r => r.ok ? r.json() : {}).catch(() => ({}));
-    if (v.version !== 2 && !sessionStorage.getItem("pb_updated")) {
-      sessionStorage.setItem("pb_updated", "1");
+    if (v.version !== 3 && !sessionStorage.getItem("pb_updated3")) {
+      sessionStorage.setItem("pb_updated3", "1");
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg) { await reg.update(); await new Promise(r => setTimeout(r, 1500)); }
       return location.reload();

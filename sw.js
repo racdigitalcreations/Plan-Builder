@@ -10,7 +10,8 @@ const TEST_FOLDER = "Testing";                         // Test mode: everything 
 // Never read as the client's photos: screenshots of other businesses, and the app's own output (like drive.py)
 const NOT_PHOTOS = ["Inspiration", FINAL_FOLDER, "Final Exports for Posting", OLDER_FOLDER, PROOFS_FOLDER, "Posts",
                     "Carousels", "Archive", TEST_FOLDER];
-const VERSION = 2;                                     // the page checks this, so a new page never talks to an old helper
+const DECK = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const VERSION = 3;                                     // the page checks this, so a new page never talks to an old helper
 const FIELDS = "id,name,mimeType,thumbnailLink,createdTime,modifiedTime";
 const API = "https://www.googleapis.com/drive/v3/files";
 const LIST_SECONDS = 120;                             // folder listings are remembered for 2 minutes
@@ -283,6 +284,46 @@ class Drive {
     return "";
   }
 
+  /** The PowerPoint decks Create Posts made on the computer: Posts / Photo Posts / <run> / [PowerPoint /] <size> / *.pptx */
+  async decks(client, test) {
+    const home = await this.home(client, test);
+    if (!home) return [];
+    const found = [];
+    const top = await this.children(home, true);
+    const posts = childFolder(top, "Posts");
+    const starts = [];
+    if (posts) { const pp = childFolder(await this.children(posts.id, true), "Photo Posts"); if (pp) starts.push(pp); }
+    const old = childFolder(top, "Carousels");                 // the old name of Posts / Photo Posts
+    if (old) starts.push(old);
+    for (const start of starts) {
+      let level = [{ id: start.id, run: "", path: "" }];
+      for (let depth = 0; depth < 4 && level.length; depth++) {
+        const inside = await this.childrenOf(level.map(f => f.id), true);
+        const next = [];
+        for (const folder of level) {
+          for (const item of inside.get(folder.id) || []) {
+            if (isFolder(item)) { if (item.name !== OLDER_FOLDER) next.push({ id: item.id, run: folder.run || item.name, path: folder.path + item.name + "/" }); }
+            else if (item.mimeType === DECK || /\.pptx$/i.test(item.name)) {
+              found.push({ id: item.id, name: item.name, post: postTitle(item.name), run: folder.run || "(loose)", folder: folder.id,
+                           size: /9\s*x\s*16|9:16/i.test(item.name + " " + folder.path) ? "9:16" : "4:5", modified: item.modifiedTime || "" });
+            }
+          }
+        }
+        level = next;
+      }
+    }
+    found.sort((a, b) => a.run < b.run ? 1 : a.run > b.run ? -1 : a.name.localeCompare(b.name, undefined, { numeric: true }));
+    return found;
+  }
+
+  /** The client's folder ids (for Open in Drive) and their newest Strategy doc. */
+  async folders(client, test) {
+    const id = await this.clientId(client), inside = await this.children(id, true);
+    const docs = inside.filter(i => i.name.includes(" - Strategy - ")).sort((a, b) => (a.modifiedTime || "") < (b.modifiedTime || "") ? 1 : -1);
+    const testing = childFolder(inside, TEST_FOLDER);
+    return { id, testing: testing ? testing.id : null, strategy: docs[0] ? { id: docs[0].id, name: docs[0].name } : null };
+  }
+
   async proofs(client) {
     const folder = childFolder(await this.children(await this.clientId(client), true), PROOFS_FOLDER);
     if (!folder) return [];
@@ -405,6 +446,8 @@ async function answer(request, what, q) {
     if (what === "clients") return reply({ clients: await d.clientList() });
     if (what === "version") return reply({ version: VERSION });
     if (what === "posts") return reply({ posts: await d.posts(q.get("client"), q.get("test") === "1") });
+    if (what === "decks") return reply({ decks: await d.decks(q.get("client"), q.get("test") === "1") });
+    if (what === "folders") return reply(await d.folders(q.get("client")));
     if (what === "media") return reply({ photos: await d.media(q.get("client")) });
     if (what === "strategy") return reply({ text: await d.strategy(q.get("client")) });
     if (what === "settings") return reply({ settings: await d.jsonFile(SETTINGS_FILE) });

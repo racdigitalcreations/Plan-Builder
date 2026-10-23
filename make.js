@@ -268,6 +268,8 @@ const MAKE = (() => {
     try { const plan = (await api("api/strategy?client=" + encodeURIComponent(client))).text; if (plan) info.push("THEIR SOCIAL MEDIA STRATEGY (voice, pillars, hashtags):\n" + plan); }
     catch (e) { if (e.message === "signin") throw e; }
     if (kit.contact) info.push("Their contact line (use it exactly as written, it's checked): " + kit.contact);
+    try { const extra = (await notes(client)).trim(); if (extra) info.push("MORE NOTES FROM THE AGENCY (newest first):\n" + extra.slice(0, 3000)); }
+    catch (e) { if (e.message === "signin") throw e; }
     return info.join("\n");
   }
   function planPrompt(client, count, photos, amount, note, info, least) {
@@ -797,6 +799,151 @@ ${info}`, images, 3000));
     });
   }
 
+  // ---------- decks: posting JPGs from a PowerPoint deck (edited in PowerPoint on the iPad, or made on the computer) ----------
+  // Google turns a copy of the deck into Google Slides and hands back a PDF; the iPad draws each page as a 1080-wide JPG.
+  // (The same converter the computer uses when PowerPoint isn't there, so fonts can look a little different.)
+  const PDFJS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+  async function pdfReader() {                     // loaded only when needed, so the app stays quick
+    if (!window.pdfjsLib) {
+      await new Promise((done, fail) => {
+        const tag = document.createElement("script");
+        tag.src = PDFJS + "pdf.min.js"; tag.onload = done;
+        tag.onerror = () => fail(new Error("Couldn't load the PDF reader. Check the internet connection."));
+        document.head.append(tag);
+      });
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + "pdf.worker.min.js";
+    }
+    return window.pdfjsLib;
+  }
+  /** Draw a deck's slides: [canvas] at the posting size (4:5 or 9:16, from the slide shape). */
+  async function deckSlides(deck, say) {
+    say("Google is reading the deck...");
+    const copy = await (await call("POST", API + "/" + encodeURIComponent(deck.id) + "/copy?fields=id",
+      JSON.stringify({ name: "Plan Builder iPad - temporary copy - " + deck.name, mimeType: "application/vnd.google-apps.presentation" }),
+      "application/json")).json();
+    let data;
+    try { data = await (await call("GET", API + "/" + encodeURIComponent(copy.id) + "/export?mimeType=application/pdf")).arrayBuffer(); }
+    finally { await call("DELETE", API + "/" + encodeURIComponent(copy.id)).catch(() => {}); }   // the temporary copy only
+    const lib = await pdfReader();
+    const doc = await lib.getDocument({ data }).promise;
+    const out = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      say(`Drawing slide ${i} of ${doc.numPages}...`);
+      const page = await doc.getPage(i), plain = page.getViewport({ scale: 1 });
+      const sizeKey = plain.height / plain.width > 1.5 ? "9:16" : "4:5", size = SIZES[sizeKey];
+      const scale = size.w / plain.width, view = page.getViewport({ scale });
+      const drawn = document.createElement("canvas");
+      drawn.width = size.w; drawn.height = Math.round(view.height);
+      await page.render({ canvasContext: drawn.getContext("2d"), viewport: view }).promise;
+      const c = document.createElement("canvas"); c.width = size.w; c.height = size.h;       // exactly 1080x1350 or 1080x1920
+      const ctx = c.getContext("2d"); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(drawn, 0, (size.h - drawn.height) / 2);
+      c.sizeKey = sizeKey;
+      out.push(c);
+    }
+    if (!out.length) throw new Error("That deck has no slides.");
+    return out;
+  }
+  /** Posting JPGs from a deck into Final Posts / Photo Posts / <size> / <post>, like Export on the computer.
+   *  The post's Caption.txt stays; its old JPGs are replaced. test: the deck is in the Testing folder. */
+  async function deckToFinal(client, deck, test, say) {
+    const canvases = await deckSlides(deck, say);
+    const sizeKey = canvases[0].sizeKey, size = SIZES[sizeKey];
+    let home = await clientId(client);
+    if (test) home = await folder(home, "Testing");
+    const title = safeName(deck.post);
+    const target = await folder(await folder(await folder(await folder(home, "Final Posts"), "Photo Posts"), size.folder), title);
+    for (const f of await children(target)) {
+      const n = f.name.toLowerCase();
+      if ((f.mimeType || "").startsWith("image/") || n.endsWith("slides.json")) await trash(f.id).catch(() => {});
+    }
+    for (let i = 0; i < canvases.length; i++) {
+      say(`Saving slide ${i + 1} of ${canvases.length}...`);
+      await upload(target, `${title} - ${String(i + 1).padStart(2, "0")} - ${size.tag}.jpg`, await jpeg(canvases[i]), "image/jpeg");
+    }
+    refreshed();
+    return { title, count: canvases.length, sizeKey, folderId: target };
+  }
+
+  /** A finished post's slides as files, for the Share button (Save to Photos, Instagram, Messages...). */
+  async function slideFiles(post, sizeKey) {
+    const set = post.sizes[sizeKey];
+    const files = [];
+    for (let i = 0; i < set.images.length; i++) {
+      const r = await fetch("api/file?id=" + encodeURIComponent(set.images[i]));
+      if (!r.ok) throw new Error("A slide couldn't be downloaded from Google Drive.");
+      const blob = await r.blob();
+      files.push(new File([blob], `${safeName(post.name)} - ${String(i + 1).padStart(2, "0")}.jpg`, { type: blob.type || "image/jpeg" }));
+    }
+    return files;
+  }
+
+  // ---------- quick notes about a client: "<client> - iPad Notes", a Google Doc in their Client Info folder ----------
+  // (Kept apart from their Client Info doc, which the computer rewrites from its own boxes.) Create Posts reads it too.
+  const DOC = "application/vnd.google-apps.document";
+  async function notesDoc(client, make) {
+    const id = await clientId(client);
+    const info = make ? await folder(id, "Client Info") : (await findFolder(id, "Client Info") || {}).id;
+    if (!info) return null;
+    const name = `${client} - iPad Notes`;
+    const url = API + "?q=" + encodeURIComponent(`'${info}' in parents and name = '${q(name)}' and trashed = false`) + "&fields=files(id)";
+    const found = ((await (await call("GET", url)).json()).files || [])[0];
+    if (found || !make) return found ? found.id : null;
+    const form = new FormData();
+    form.append("metadata", new Blob([JSON.stringify({ name, parents: [info], mimeType: DOC })], { type: "application/json" }));
+    form.append("file", new Blob([`${client} - iPad Notes\n`], { type: "text/plain" }));
+    return (await (await call("POST", UPLOAD + "?uploadType=multipart&fields=id", form)).json()).id;
+  }
+  async function notes(client) {
+    const id = await notesDoc(client, false);
+    if (!id) return "";
+    const text = await (await call("GET", API + "/" + encodeURIComponent(id) + "/export?mimeType=text/plain")).text();
+    return text.replace(/^\uFEFF/, "").replace(new RegExp("^\\s*" + client.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " - iPad Notes\\s*", "i"), "").trim();
+  }
+  /** Add a dated note at the top. Returns the notes' text now. */
+  async function addNote(client, text) {
+    const id = await notesDoc(client, true);
+    const now = (await notes(client)).trim();
+    const all = `${client} - iPad Notes\n\n${today()}: ${text.trim()}\n${now ? "\n" + now + "\n" : ""}`;
+    await replaceText(id, all, "text/plain");
+    return all;
+  }
+  const docLink = async (client) => { const id = await notesDoc(client, false); return id ? "https://docs.google.com/document/d/" + id + "/edit" : ""; };
+
+  // ---------- changes the client asked for (Show to Client > Needs Changes), in the main folder ----------
+  const FEEDBACK = "Plan Builder iPad Feedback.json";
+  async function feedbackFile() {
+    const root = await rootId();
+    const url = API + "?q=" + encodeURIComponent(`'${root}' in parents and name = '${q(FEEDBACK)}' and trashed = false`) + "&fields=files(id)";
+    return { root, file: ((await (await call("GET", url)).json()).files || [])[0] || null };
+  }
+  async function feedback() {
+    const { file } = await feedbackFile();
+    if (!file) return {};
+    try { const v = JSON.parse((await (await call("GET", API + "/" + file.id + "?alt=media")).text()) || "{}"); return v && typeof v === "object" ? v : {}; }
+    catch (e) { if (e.message === "signin") throw e; return {}; }
+  }
+  const changeKey = (client, post) => "changes:" + client + "|" + post;
+  async function writeFeedback(change) {
+    const { root, file } = await feedbackFile();
+    let all = {};
+    if (file) { try { all = JSON.parse((await (await call("GET", API + "/" + file.id + "?alt=media")).text()) || "{}"); } catch (e) {} }
+    change(all);
+    const text = JSON.stringify(all, null, 1);
+    if (file) await replaceText(file.id, text, "application/json");
+    else await upload(root, FEEDBACK, new Blob([text], { type: "application/json" }), "application/json");
+    return all;
+  }
+  /** The client wants changes to a post: kept with the post, and added to their iPad Notes. */
+  async function askChanges(client, post, name, note) {
+    await writeFeedback(all => { all[changeKey(client, post)] = { day: today(), post: name, note: note.trim() }; });
+    await addNote(client, `${client} asked for changes to "${name}": ${note.trim() || "(no details)"}`);
+  }
+  async function clearChanges(client, post) {
+    await writeFeedback(all => { delete all[changeKey(client, post)]; });
+  }
+
   return { SIZES, settings, engine, testMode, local, setLocal, plan, brand, render, drawSlide, save, saveCaption, rewriteCaption,
-           addPhotos, captionText, fixHashtags, picture, photoUrl, logToDrive, Refused, palette, brandKit, safeName };
+           addPhotos, captionText, fixHashtags, picture, photoUrl, logToDrive, Refused, palette, brandKit, safeName,
+           deckToFinal, slideFiles, notes, addNote, docLink, feedback, askChanges, clearChanges, changeKey };
 })();
